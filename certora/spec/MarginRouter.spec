@@ -30,24 +30,6 @@ methods {
     unresolved external in PoolManager.swap(PoolManager.PoolKey,IPoolManager.SwapParams,bytes) => DISPATCH [
         MarginHookManager.beforeSwap(address,PoolManager.PoolKey,IPoolManager.SwapParams,bytes)
     ] default HAVOC_ECF;
-
-    /// Pure function is summarized by a generic arbitrary mapping - this is logically sound.
-    function Hooks.hasPermission(address self, uint160 flag) internal returns (bool) => CVLHasPermission(self, flag);
-}
-
-definition BEFORE_SWAP_FLAG() returns uint160 = 1 << 7;
-definition AFTER_SWAP_FLAG() returns uint160 = 1 << 6;
-definition BEFORE_SWAP_RETURNS_DELTA_FLAG() returns uint160 = 1 << 3;
-definition AFTER_SWAP_RETURNS_DELTA_FLAG() returns uint160 = 1 << 2;
-definition BEFORE_ADD_LIQUIDITY_FLAG() returns uint160 = 1 << 11;
-
-persistent ghost CVLHasPermission(address,uint160) returns bool {
-    /// Fix the permissions based on the MarginHookManager.
-    axiom CVLHasPermission(Hook, BEFORE_SWAP_FLAG()) == true;
-    axiom CVLHasPermission(Hook, BEFORE_SWAP_RETURNS_DELTA_FLAG()) == true;
-    axiom CVLHasPermission(Hook, AFTER_SWAP_FLAG()) == false;
-    axiom CVLHasPermission(Hook, AFTER_SWAP_RETURNS_DELTA_FLAG()) == false;
-    axiom CVLHasPermission(Hook, BEFORE_ADD_LIQUIDITY_FLAG()) == true;
 }
 
 use builtin rule sanity filtered{f -> f.contract == currentContract}

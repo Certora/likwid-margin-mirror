@@ -2,7 +2,10 @@ import "./CVLERC20.spec";
 import "./MathSummary.spec";
 import "./PoolManager.spec";
 
+using MarginHookManager as MarginHookManager;
 use rule removeLiquidityEndsWithZeroVirtualAccounting;
+use rule addLiquidityEndsWithZeroVirtualAccounting;
+use rule releaseEndsWithZeroVirtualAccounting;
 
 methods {
     /// Unresolved unlock callback:
@@ -24,13 +27,13 @@ definition alwaysReverting(method f) returns bool = false
     || f.selector == sig:MarginHookManager.beforeRemoveLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,bytes).selector
     || f.selector == sig:MarginHookManager.beforeAddLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,bytes).selector
     || f.selector == sig:MarginHookManager.afterSwap(address,PoolManager.PoolKey,IPoolManager.SwapParams,PoolManager.BalanceDelta,bytes).selector
-    || f.selector == sig:MarginHookManager.afterSwapafterRemoveLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,PoolManager.BalanceDelta,PoolManager.BalanceDelta,bytes).selector
-    || f.selector == sig:MarginHookManager.afterSwapafterAddLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,PoolManager.BalanceDelta,PoolManager.BalanceDelta,bytes).selector
-    || f.selector == sig:MarginHookManager.afterSwapafterInitialize(address,PoolManager.PoolKey,uint160,int24).selector
-    || f.selector == sig:MarginHookManager.afterSwapbeforeDonate(address,PoolManager.PoolKey,uint256,uint256,bytes).selector
-    || f.selector == sig:MarginHookManager.afterSwapafterDonate(address,PoolManager.PoolKey,uint256,uint256,bytes).selector;
+    || f.selector == sig:MarginHookManager.afterRemoveLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,PoolManager.BalanceDelta,PoolManager.BalanceDelta,bytes).selector
+    || f.selector == sig:MarginHookManager.afterAddLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,PoolManager.BalanceDelta,PoolManager.BalanceDelta,bytes).selector
+    || f.selector == sig:MarginHookManager.afterInitialize(address,PoolManager.PoolKey,uint160,int24).selector
+    || f.selector == sig:MarginHookManager.beforeDonate(address,PoolManager.PoolKey,uint256,uint256,bytes).selector
+    || f.selector == sig:MarginHookManager.afterDonate(address,PoolManager.PoolKey,uint256,uint256,bytes).selector;
 
-// excluding methods whose body is just `revert <msg>;
+// excluding methods whose body is just `revert <msg>';
 use builtin rule sanity filtered{f -> !alwaysReverting(f) && f.contract != PM}
 
 rule alwaysRevert(method f) filtered{f -> alwaysReverting(f)}
