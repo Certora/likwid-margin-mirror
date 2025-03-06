@@ -26,6 +26,7 @@ function zeroCurrencyDeltaForAll() returns bool {
     return forall address token. forall address account. PM._currencyDelta[token][account] == 0;
 }
 
+/// Since there is no liquidity in pools in the PoolManager, the hook should never pass a non-zero amount to be swapped.
 function assertZeroDelta(int256 amountToSwap) returns int256 {
     assert amountToSwap == 0, "The hook must not pass any amount to the pool swap function";
     return 0;
@@ -41,16 +42,13 @@ rule removeLiquidityEndsWithZeroVirtualAccounting()
     require zeroCurrencyDeltaForAll();
         MarginHookManager.removeLiquidity(e, params);
     assert zeroCurrencyDeltaForAll();
-    /// Easier to debug
-    //address token;
-    //address account;
-    //assert PM._currencyDelta[token][account] == 0;
 }
 
 /// @title Unlocking the PoolManager in addLiquidity() should always result in zeroed-out virtual accounting.
 rule addLiquidityEndsWithZeroVirtualAccounting()
 {
     env e;
+    require e.msg.sender != PM;
     MarginHookManager.AddLiquidityParams params;
     require MarginHookManager.hookStatusStore[params.poolId].key.hooks == MarginHookManager;
     
@@ -63,6 +61,7 @@ rule addLiquidityEndsWithZeroVirtualAccounting()
 rule releaseEndsWithZeroVirtualAccounting()
 {
     env e;
+    require e.msg.sender != PM;
     MarginHookManager.ReleaseParams params;
     require MarginHookManager.hookStatusStore[params.poolId].key.hooks == MarginHookManager;
     

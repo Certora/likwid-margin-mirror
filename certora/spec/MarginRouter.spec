@@ -19,6 +19,7 @@ methods {
     unresolved external in MarginHookManager.unlockCallback(bytes) => DISPATCH [
         MarginHookManager.handleRelease(MarginHookManager.ReleaseParams),
         MarginHookManager.handleAddLiquidity(address,PoolManager.PoolKey,uint256,uint256),
+        MarginHookManager.handleRemoveLiquidity(address,PoolManager.PoolKey,uint256,uint256),
         MarginHookManager.handleMargin(address,MarginHookManager.MarginParams)
     ] default HAVOC_ECF;
     
