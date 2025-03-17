@@ -20,7 +20,9 @@ methods {
         PairPoolManager.handleRelease(PairPoolManager.ReleaseParams),
         PairPoolManager.handleAddLiquidity(address,PoolManager.PoolKey,uint256,uint256),
         PairPoolManager.handleRemoveLiquidity(address,PoolManager.PoolKey,uint256,uint256),
-        PairPoolManager.handleMargin(address,address,PairPoolManager.MarginParamsVo)
+        PairPoolManager.handleMargin(address,address,PairPoolManager.MarginParamsVo),
+        PairPoolManager.handleSwapMirror(address,PoolManager.Currency,uint256),
+        PairPoolManager.handleCollectFees(address,PoolManager.Currency ,uint256)
     ] default HAVOC_ECF;
 }
 
