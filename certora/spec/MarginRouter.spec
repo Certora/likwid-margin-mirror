@@ -8,6 +8,9 @@ methods {
     /// Unresolved unlock callback:
     function _.unlockCallback(bytes) external => DISPATCHER(true);
 
+    /// Temporary solution for MarginFees (avoid linking)
+    function _.getBorrowRateCumulativeLast(PoolStatusManager.PoolStatus status) external => randomRates() expect (uint256,uint256);
+
     /// Unresolved unlock callback in PM:
     unresolved external in PoolManager.unlock(bytes) => DISPATCH [
         PairPoolManager.unlockCallback(bytes),
@@ -29,6 +32,11 @@ methods {
     unresolved external in PoolManager.swap(PoolManager.PoolKey,IPoolManager.SwapParams,bytes) => DISPATCH [
         Hook.beforeSwap(address,PoolManager.PoolKey,IPoolManager.SwapParams,bytes)
     ] default HAVOC_ECF;
+}
+
+function randomRates() returns (uint256, uint256) {
+    uint256 rate0CumulativeLast; uint256 rate1CumulativeLast;
+    return (rate0CumulativeLast, rate1CumulativeLast);
 }
 
 use builtin rule sanity filtered{f -> f.contract == currentContract}

@@ -8,12 +8,16 @@ methods {
     function Hooks.hasPermission(address self, uint160 flag) internal returns (bool) => CVLHasPermission(self, flag);
 }
 
+/// Source: lib/v4-periphery/lib/v4-core/src/libraries/Hooks.sol
 definition BEFORE_SWAP_FLAG() returns uint160 = 1 << 7;
 definition AFTER_SWAP_FLAG() returns uint160 = 1 << 6;
 definition BEFORE_SWAP_RETURNS_DELTA_FLAG() returns uint160 = 1 << 3;
 definition AFTER_SWAP_RETURNS_DELTA_FLAG() returns uint160 = 1 << 2;
 definition BEFORE_ADD_LIQUIDITY_FLAG() returns uint160 = 1 << 11;
+definition BEFORE_INITIALIZE_FLAG() returns uint160 = 1 << 13;
+definition AFTER_INITIALIZE_FLAG() returns uint160 = 1 << 12;
 
+/// Based on Hook.getHookPermissions() - must be verified against the real contract!
 persistent ghost CVLHasPermission(address,uint160) returns bool {
     /// Fix the permissions based on the MarginHook.
     axiom CVLHasPermission(Hook, BEFORE_SWAP_FLAG()) == true;
@@ -21,6 +25,8 @@ persistent ghost CVLHasPermission(address,uint160) returns bool {
     axiom CVLHasPermission(Hook, AFTER_SWAP_FLAG()) == false;
     axiom CVLHasPermission(Hook, AFTER_SWAP_RETURNS_DELTA_FLAG()) == false;
     axiom CVLHasPermission(Hook, BEFORE_ADD_LIQUIDITY_FLAG()) == true;
+    axiom CVLHasPermission(Hook, BEFORE_INITIALIZE_FLAG()) == true;
+    axiom CVLHasPermission(Hook, AFTER_INITIALIZE_FLAG()) == false;
 }
 
 definition alwaysReverting(method f) returns bool = false
