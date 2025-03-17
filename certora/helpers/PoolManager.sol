@@ -6,6 +6,7 @@ import { SafeCast } from "lib/v4-periphery/lib/v4-core/src/libraries/SafeCast.so
 import { BalanceDelta, BalanceDeltaLibrary } from "lib/v4-periphery/lib/v4-core/src/types/BalanceDelta.sol"; 
 import { ERC6909Claims } from "lib/v4-periphery/lib/v4-core/src/ERC6909Claims.sol";
 import { PoolKey } from "lib/v4-periphery/lib/v4-core/src/types/PoolKey.sol";
+import { PoolId, PoolIdLibrary } from "lib/v4-periphery/lib/v4-core/src/types/PoolId.sol";
 import { IHooks, Hooks } from "lib/v4-periphery/lib/v4-core/src/libraries/Hooks.sol";
 import { IPoolManager } from "lib/v4-periphery/lib/v4-core/src/interfaces/IPoolManager.sol";
 import { BeforeSwapDelta } from "lib/v4-periphery/lib/v4-core/src/types/BeforeSwapDelta.sol";
@@ -168,8 +169,17 @@ contract PoolManager is IPoolManagerLight, ERC6909Claims {
     }
 
     /// @inheritdoc IPoolManagerLight
+    function initialize(PoolKey memory key, uint160 sqrtPriceX96) external returns (int24 tick) {
+        Hooks.beforeInitialize(key.hooks, key, sqrtPriceX96);
+            PoolId id = PoolIdLibrary.toId(key);
+            tick = _initializePool(id, sqrtPriceX96);
+        Hooks.afterInitialize(key.hooks, key, sqrtPriceX96, tick);
+    }
+
     /// @dev Certora - to be summarized
-    function initialize(PoolKey memory key, uint160 sqrtPriceX96) external returns (int24 tick) {}
+    function _initializePool(PoolId id, uint160 sqrtPriceX96) internal view returns (int24) {
+        return int24(0);
+    }
 
     /// @inheritdoc IPoolManagerLight
     function swap(

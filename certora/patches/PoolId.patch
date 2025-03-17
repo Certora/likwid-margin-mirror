@@ -1,0 +1,15 @@
+--- ./lib/v4-periphery/lib/v4-core/src/types/PoolId.sol	2025-03-17 14:05:40.044208542 +0200
++++ ./certora/patches/PoolId.sol	2025-03-17 14:05:50.224206379 +0200
+@@ -9,9 +9,10 @@
+ library PoolIdLibrary {
+     /// @notice Returns value equal to keccak256(abi.encode(poolKey))
+     function toId(PoolKey memory poolKey) internal pure returns (PoolId poolId) {
+-        assembly ("memory-safe") {
++        /*assembly ("memory-safe") {
+             // 0xa0 represents the total size of the poolKey struct (5 slots of 32 bytes)
+             poolId := keccak256(poolKey, 0xa0)
+-        }
++        }*/
++        poolId = PoolId.wrap(keccak256(abi.encode(poolKey)));
+     }
+ }
