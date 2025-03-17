@@ -1,3 +1,4 @@
 . ./certora/scripts/files.sh
 diff -uN $file1_origin $file1_munged | sed 's+\$file1_origin/++g' | sed 's+$file1_munged++g' > $patch_path1
 diff -uN $file2_origin $file2_munged | sed 's+\$file2_origin/++g' | sed 's+$file2_munged++g' > $patch_path2
+diff -uN $file3_origin $file3_munged | sed 's+\$file3_origin/++g' | sed 's+$file3_munged++g' > $patch_path3

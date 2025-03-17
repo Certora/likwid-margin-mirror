@@ -6,6 +6,7 @@ using PairPoolManager as PairPoolManager;
 use rule removeLiquidityEndsWithZeroVirtualAccounting;
 use rule addLiquidityEndsWithZeroVirtualAccounting;
 use rule releaseEndsWithZeroVirtualAccounting;
+use invariant ValidStatusInitializedPools;
 
 methods {
     /// Unresolved unlock callback:

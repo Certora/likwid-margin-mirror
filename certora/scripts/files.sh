@@ -6,3 +6,7 @@ patch_path1="./certora/patches/ParseBytes.patch"
 file2_origin="./lib/v4-periphery/lib/v4-core/src/libraries/Hooks.sol"
 file2_munged="./certora/patches/Hooks.sol"
 patch_path2="./certora/patches/Hooks.patch"
+# PoolId.sol
+file3_origin="./lib/v4-periphery/lib/v4-core/src/types/PoolId.sol"
+file3_munged="./certora/patches/PoolId.sol"
+patch_path3="./certora/patches/PoolId.patch"
