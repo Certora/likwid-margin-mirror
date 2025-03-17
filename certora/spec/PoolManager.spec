@@ -23,6 +23,16 @@ persistent ghost CVLHasPermission(address,uint160) returns bool {
     axiom CVLHasPermission(Hook, BEFORE_ADD_LIQUIDITY_FLAG()) == true;
 }
 
+definition alwaysReverting(method f) returns bool = false
+    || f.selector == sig:Hook.beforeRemoveLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,bytes).selector
+    || f.selector == sig:Hook.beforeAddLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,bytes).selector
+    || f.selector == sig:Hook.afterSwap(address,PoolManager.PoolKey,IPoolManager.SwapParams,PoolManager.BalanceDelta,bytes).selector
+    || f.selector == sig:Hook.afterRemoveLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,PoolManager.BalanceDelta,PoolManager.BalanceDelta,bytes).selector
+    || f.selector == sig:Hook.afterAddLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,PoolManager.BalanceDelta,PoolManager.BalanceDelta,bytes).selector
+    || f.selector == sig:Hook.afterInitialize(address,PoolManager.PoolKey,uint160,int24).selector
+    || f.selector == sig:Hook.beforeDonate(address,PoolManager.PoolKey,uint256,uint256,bytes).selector
+    || f.selector == sig:Hook.afterDonate(address,PoolManager.PoolKey,uint256,uint256,bytes).selector;
+
 function zeroCurrencyDeltaForAll() returns bool {
     /// Overall require on storage by direct access.
     return forall address token. forall address account. PM._currencyDelta[token][account] == 0;

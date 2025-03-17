@@ -3,7 +3,7 @@ import "./MathSummary.spec";
 import "./PoolManager.spec"; 
 
 methods {
-    function PoolStatusManager.getStatus(PoolManager.PoolId poolId) external returns (PoolStatusManager.PoolStatus memory) envfree;
+    function PoolStatusManager.getStatus(PoolManager.PoolId poolId) external returns (PoolStatusManager.PoolStatus memory);
     
     /// Unresolved unlock callback:
     function _.unlockCallback(bytes) external => DISPATCHER(true);
@@ -35,14 +35,14 @@ use builtin rule sanity filtered{f -> f.contract == currentContract}
 
 invariant ValidStatusKeysHooks(PoolManager.PoolId poolId)
     PoolStatusManager.statusStore[poolId].key.hooks == 0 || PoolStatusManager.statusStore[poolId].key.hooks == Hook
-    filtered{f -> f.contract == Hook}
+    filtered{f -> f.contract == Hook && !alwaysReverting(f)}
 
 /// For a non-zero amountIn, the amount out should also be non-zero.
 /// Inner-assert: the call to swap() should not involve any non-zero amount to be swapped within PoolManager. 
 rule swapCorrectness() {
     env e;
     MarginRouter.SwapParams params;
-    PoolStatusManager.PoolStatus status = PoolStatusManager.getStatus(params.poolId);
+    PoolStatusManager.PoolStatus status = PoolStatusManager.getStatus(e, params.poolId);
     /// Prove this is correct.
     require status.key.hooks == Hook;
     uint256 amountOut = exactInput(e, params);

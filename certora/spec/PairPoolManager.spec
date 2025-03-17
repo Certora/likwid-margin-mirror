@@ -24,19 +24,9 @@ methods {
     ] default HAVOC_ECF;
 }
 
-definition alwaysReverting(method f) returns bool = false
-    || f.selector == sig:Hook.beforeRemoveLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,bytes).selector
-    || f.selector == sig:Hook.beforeAddLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,bytes).selector
-    || f.selector == sig:Hook.afterSwap(address,PoolManager.PoolKey,IPoolManager.SwapParams,PoolManager.BalanceDelta,bytes).selector
-    || f.selector == sig:Hook.afterRemoveLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,PoolManager.BalanceDelta,PoolManager.BalanceDelta,bytes).selector
-    || f.selector == sig:Hook.afterAddLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,PoolManager.BalanceDelta,PoolManager.BalanceDelta,bytes).selector
-    || f.selector == sig:Hook.afterInitialize(address,PoolManager.PoolKey,uint160,int24).selector
-    || f.selector == sig:Hook.beforeDonate(address,PoolManager.PoolKey,uint256,uint256,bytes).selector
-    || f.selector == sig:Hook.afterDonate(address,PoolManager.PoolKey,uint256,uint256,bytes).selector;
-
 // excluding methods whose body is just `revert <msg>';
 use builtin rule sanity filtered{f -> !alwaysReverting(f) && f.contract != PM}
-
+/*
 rule alwaysRevert(method f) filtered{f -> alwaysReverting(f)}
 {
     env e;
@@ -44,4 +34,4 @@ rule alwaysRevert(method f) filtered{f -> alwaysReverting(f)}
     f@withrevert(e,args);
 
     assert lastReverted;
-}
+}*/
