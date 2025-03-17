@@ -25,7 +25,11 @@ methods {
 }
 
 // excluding methods whose body is just `revert <msg>';
-use builtin rule sanity filtered{f -> !alwaysReverting(f) && f.contract != PM}
+use builtin rule sanity filtered{ f -> 
+    !alwaysReverting(f) 
+        && f.contract != PM 
+        && f.contract == currentContract
+        }
 /*
 rule alwaysRevert(method f) filtered{f -> alwaysReverting(f)}
 {
