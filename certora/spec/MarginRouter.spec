@@ -1,26 +1,24 @@
 import "./CVLERC20.spec";
 import "./MathSummary.spec";
-import "./PoolManager.spec";
-
-using MarginHookManager as Hook;
+import "./PoolManager.spec"; 
 
 methods {
-    function Hook.getStatus(PoolManager.PoolId poolId) external returns (MarginHookManager.HookStatus memory) envfree;
+    function PoolStatusManager.getStatus(PoolManager.PoolId poolId) external returns (PoolStatusManager.PoolStatus memory) envfree;
     
     /// Unresolved unlock callback:
     function _.unlockCallback(bytes) external => DISPATCHER(true);
 
     /// Unresolved unlock callback in PM:
     unresolved external in PoolManager.unlock(bytes) => DISPATCH [
-        MarginHookManager.unlockCallback(bytes),
+        PairPoolManager.unlockCallback(bytes),
         MarginRouter.unlockCallback(bytes)
     ] default HAVOC_ECF;
     /// Unresolved unlock callbacks:
-    unresolved external in MarginHookManager.unlockCallback(bytes) => DISPATCH [
-        MarginHookManager.handleRelease(MarginHookManager.ReleaseParams),
-        MarginHookManager.handleAddLiquidity(address,PoolManager.PoolKey,uint256,uint256),
-        MarginHookManager.handleRemoveLiquidity(address,PoolManager.PoolKey,uint256,uint256),
-        MarginHookManager.handleMargin(address,MarginHookManager.MarginParams)
+    unresolved external in PairPoolManager.unlockCallback(bytes) => DISPATCH [
+        PairPoolManager.handleRelease(PairPoolManager.ReleaseParams),
+        PairPoolManager.handleAddLiquidity(address,PoolManager.PoolKey,uint256,uint256),
+        PairPoolManager.handleRemoveLiquidity(address,PoolManager.PoolKey,uint256,uint256),
+        PairPoolManager.handleMargin(address,address,PairPoolManager.MarginParamsVo)
     ] default HAVOC_ECF;
     
     unresolved external in MarginRouter.unlockCallback(bytes) => DISPATCH [
@@ -29,14 +27,14 @@ methods {
 
     /// This one is intended to solve the unresolution of the hook call to `beforeSwap` from within PoolManager.swap()
     unresolved external in PoolManager.swap(PoolManager.PoolKey,IPoolManager.SwapParams,bytes) => DISPATCH [
-        MarginHookManager.beforeSwap(address,PoolManager.PoolKey,IPoolManager.SwapParams,bytes)
+        Hook.beforeSwap(address,PoolManager.PoolKey,IPoolManager.SwapParams,bytes)
     ] default HAVOC_ECF;
 }
 
 use builtin rule sanity filtered{f -> f.contract == currentContract}
 
 invariant ValidStatusKeysHooks(PoolManager.PoolId poolId)
-    Hook.hookStatusStore[poolId].key.hooks == 0 || Hook.hookStatusStore[poolId].key.hooks == Hook
+    PoolStatusManager.statusStore[poolId].key.hooks == 0 || PoolStatusManager.statusStore[poolId].key.hooks == Hook
     filtered{f -> f.contract == Hook}
 
 /// For a non-zero amountIn, the amount out should also be non-zero.
@@ -44,7 +42,7 @@ invariant ValidStatusKeysHooks(PoolManager.PoolId poolId)
 rule swapCorrectness() {
     env e;
     MarginRouter.SwapParams params;
-    MarginHookManager.HookStatus status = Hook.getStatus(params.poolId);
+    PoolStatusManager.PoolStatus status = PoolStatusManager.getStatus(params.poolId);
     /// Prove this is correct.
     require status.key.hooks == Hook;
     uint256 amountOut = exactInput(e, params);

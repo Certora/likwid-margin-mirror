@@ -1,4 +1,6 @@
 using PoolManager as PM;
+using PoolStatusManager as PoolStatusManager;
+using MarginHook as Hook;
 
 methods {
     function PM._swap(int256 amountToSwap) internal returns (int256) => assertZeroDelta(amountToSwap);
@@ -13,12 +15,12 @@ definition AFTER_SWAP_RETURNS_DELTA_FLAG() returns uint160 = 1 << 2;
 definition BEFORE_ADD_LIQUIDITY_FLAG() returns uint160 = 1 << 11;
 
 persistent ghost CVLHasPermission(address,uint160) returns bool {
-    /// Fix the permissions based on the MarginHookManager.
-    axiom CVLHasPermission(MarginHookManager, BEFORE_SWAP_FLAG()) == true;
-    axiom CVLHasPermission(MarginHookManager, BEFORE_SWAP_RETURNS_DELTA_FLAG()) == true;
-    axiom CVLHasPermission(MarginHookManager, AFTER_SWAP_FLAG()) == false;
-    axiom CVLHasPermission(MarginHookManager, AFTER_SWAP_RETURNS_DELTA_FLAG()) == false;
-    axiom CVLHasPermission(MarginHookManager, BEFORE_ADD_LIQUIDITY_FLAG()) == true;
+    /// Fix the permissions based on the MarginHook.
+    axiom CVLHasPermission(Hook, BEFORE_SWAP_FLAG()) == true;
+    axiom CVLHasPermission(Hook, BEFORE_SWAP_RETURNS_DELTA_FLAG()) == true;
+    axiom CVLHasPermission(Hook, AFTER_SWAP_FLAG()) == false;
+    axiom CVLHasPermission(Hook, AFTER_SWAP_RETURNS_DELTA_FLAG()) == false;
+    axiom CVLHasPermission(Hook, BEFORE_ADD_LIQUIDITY_FLAG()) == true;
 }
 
 function zeroCurrencyDeltaForAll() returns bool {
@@ -36,11 +38,11 @@ function assertZeroDelta(int256 amountToSwap) returns int256 {
 rule removeLiquidityEndsWithZeroVirtualAccounting()
 {
     env e;
-    MarginHookManager.RemoveLiquidityParams params;
-    require MarginHookManager.hookStatusStore[params.poolId].key.hooks == MarginHookManager;
+    PairPoolManager.RemoveLiquidityParams params;
+    require PoolStatusManager.statusStore[params.poolId].key.hooks == PairPoolManager;
     
     require zeroCurrencyDeltaForAll();
-        MarginHookManager.removeLiquidity(e, params);
+        PairPoolManager.removeLiquidity(e, params);
     assert zeroCurrencyDeltaForAll();
 }
 
@@ -49,11 +51,11 @@ rule addLiquidityEndsWithZeroVirtualAccounting()
 {
     env e;
     require e.msg.sender != PM;
-    MarginHookManager.AddLiquidityParams params;
-    require MarginHookManager.hookStatusStore[params.poolId].key.hooks == MarginHookManager;
+    PairPoolManager.AddLiquidityParams params;
+    require PoolStatusManager.statusStore[params.poolId].key.hooks == PairPoolManager;
     
     require zeroCurrencyDeltaForAll();
-        MarginHookManager.addLiquidity(e, params);
+        PairPoolManager.addLiquidity(e, params);
     assert zeroCurrencyDeltaForAll();
 }
 
@@ -62,10 +64,10 @@ rule releaseEndsWithZeroVirtualAccounting()
 {
     env e;
     require e.msg.sender != PM;
-    MarginHookManager.ReleaseParams params;
-    require MarginHookManager.hookStatusStore[params.poolId].key.hooks == MarginHookManager;
+    PairPoolManager.ReleaseParams params;
+    require PoolStatusManager.statusStore[params.poolId].key.hooks == PairPoolManager;
     
     require zeroCurrencyDeltaForAll();
-        MarginHookManager.release(e, params);
+        PairPoolManager.release(e, params);
     assert zeroCurrencyDeltaForAll();
 }
