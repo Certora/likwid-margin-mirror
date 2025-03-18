@@ -1,0 +1,22 @@
+--- src/PoolStatusManager.sol	2025-03-18 10:08:27.134398180 +0200
++++ ./certora/patches/PoolStatusManager.sol	2025-03-18 10:08:19.374399419 +0200
+@@ -363,8 +363,8 @@
+         if (marginOracle != address(0)) {
+             IMarginOracleWriter(marginOracle).write(status.key, _reserve0, _reserve1);
+         }
+-
+-        emit Sync(
++        /// Avoid stack-too-deep
++        /*emit Sync(
+             pooId,
+             status.realReserve0,
+             status.realReserve1,
+@@ -374,7 +374,7 @@
+             status.lendingRealReserve1,
+             status.lendingMirrorReserve0,
+             status.lendingMirrorReserve1
+-        );
++        );*/
+         _callUpdate();
+     }
+ 

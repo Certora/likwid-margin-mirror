@@ -32,8 +32,9 @@ function currencyTransfer(address sender, PoolManager.Currency currency, address
             require ef.msg.sender == sender;
             Helper.callFallback(ef, recipient, amount);
         mathint native_post = nativeBalances[recipient];
-        /// Sanity check for success
-        assert native_post - native_pre == amount;
+        /// Assumes success, and no further Eth transfer in the callback.
+        require recipient != sender => native_post - native_pre == amount;
+        require recipient == sender => native_post == native_pre;
     } else {
         bool success = transferCVL(token, sender, recipient, amount);
         require success;
