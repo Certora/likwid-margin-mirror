@@ -88,6 +88,17 @@ function mulDivUpCVL_no_div_pessim(uint256 x, uint256 y, uint256 z) returns uint
 │ Division-optimistic summaries (assumes no overflow)                                                                        
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 */
+function mulDivCVL(uint256 x, uint256 y, uint256 denominator, Math.Rounding rounding) returns uint256 {
+    if(rounding == Math.Rounding.Floor) {
+        return mulDivDownCVL(x,y,denominator);
+    } else if(rounding == Math.Rounding.Ceil) {
+        return mulDivUpCVL(x,y,denominator);
+    } else {
+        /// We don't expect to reach other rounding cases.
+        assert false;
+    }
+    return 0;
+}
 
 function divUpCVL(uint256 x, uint256 y) returns uint256 {
     require y !=0;

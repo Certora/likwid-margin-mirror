@@ -73,18 +73,21 @@ function assertZeroDelta(int256 amountToSwap) returns int256 {
 }
 
 /// @title Valid status store for initalized pools
-invariant ValidStatusInitializedPools(PoolManager.PoolId poolId)
+invariant ValidStatusInitializedPools()
+    forall PoolManager.PoolId poolId.
     (pool_is_initialized[poolId] => (/// Initialized
         PoolStatusManager.statusStore[poolId].rate0CumulativeLast == ONE_TRILLION() &&
         PoolStatusManager.statusStore[poolId].rate1CumulativeLast == ONE_TRILLION() &&
         PoolStatusManager.statusStore[poolId].blockTimestampLast > 0 &&
-        PoolStatusManager.statusStore[poolId].key.hooks == Hook))
+        PoolStatusManager.statusStore[poolId].key.hooks == Hook &&
+        PoolStatusManager.statusStore[poolId].key.currency1 > 0))
     &&
     (!pool_is_initialized[poolId] => (/// Uninitialized
         PoolStatusManager.statusStore[poolId].rate0CumulativeLast == 0 &&
         PoolStatusManager.statusStore[poolId].rate1CumulativeLast == 0 &&
         PoolStatusManager.statusStore[poolId].blockTimestampLast == 0 &&
-        PoolStatusManager.statusStore[poolId].key.hooks == 0))
+        PoolStatusManager.statusStore[poolId].key.hooks == 0 &&
+        PoolStatusManager.statusStore[poolId].key.currency1 == 0))
     {
         preserved with (env e) {
             require e.block.timestamp > 0;
@@ -126,5 +129,48 @@ rule releaseEndsWithZeroVirtualAccounting()
     
     require zeroCurrencyDeltaForAll();
         PairPoolManager.release(e, params);
+    assert zeroCurrencyDeltaForAll();
+}
+
+/// @title Unlocking the PoolManager in collectProtocolFees() should always result in zeroed-out virtual accounting.
+rule collectProtocolFeesEndsWithZeroVirtualAccounting()
+{
+    env e;
+    require e.msg.sender != PM;
+    address recipient; PoolManager.Currency currency; uint256 amount;
+    
+    require zeroCurrencyDeltaForAll();
+        PairPoolManager.collectProtocolFees(e, recipient, currency, amount);
+    assert zeroCurrencyDeltaForAll();
+}
+
+/// @title Unlocking the PoolManager in swapMirror() should always result in zeroed-out virtual accounting.
+rule swapMirrorEndsWithZeroVirtualAccounting()
+{
+    env e;
+    require e.msg.sender != PM;
+    address sender;
+    address recipient; 
+    PoolManager.PoolId poolId; 
+    bool zeroForOne; 
+    uint256 amountIn;
+    require PoolStatusManager.statusStore[poolId].key.hooks == Hook;
+    
+    require zeroCurrencyDeltaForAll();
+        PairPoolManager.swapMirror(e, sender, recipient, poolId, zeroForOne, amountIn);
+    assert zeroCurrencyDeltaForAll();
+}
+
+/// @title Unlocking the PoolManager in margin() should always result in zeroed-out virtual accounting.
+rule marginEndsWithZeroVirtualAccounting()
+{
+    env e;
+    require e.msg.sender != PM;
+    address sender;
+    PairPoolManager.MarginParamsVo paramsVo;
+    require PoolStatusManager.statusStore[paramsVo.params.poolId].key.hooks == Hook;
+    
+    require zeroCurrencyDeltaForAll();
+        PairPoolManager.margin(e, sender, paramsVo);
     assert zeroCurrencyDeltaForAll();
 }
