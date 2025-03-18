@@ -100,18 +100,6 @@ function mulDivCVL(uint256 x, uint256 y, uint256 denominator, Math.Rounding roun
     return 0;
 }
 
-function mulDivCVL(uint256 x, uint256 y, uint256 denominator, Math.Rounding rounding) returns uint256 {
-    if(rounding == Math.Rounding.Floor) {
-        return mulDivDownCVL(x,y,denominator);
-    } else if(rounding == Math.Rounding.Ceil) {
-        return mulDivUpCVL(x,y,denominator);
-    } else {
-        /// We don't expect to reach other rounding cases.
-        assert false;
-    }
-    return 0;
-}
-
 function divUpCVL(uint256 x, uint256 y) returns uint256 {
     require y !=0;
     return require_uint256((x + y - 1) / y);
