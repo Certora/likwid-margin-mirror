@@ -4,9 +4,10 @@ import "./PoolManager.spec";
 import "./PoolStatusManager.spec";
 import "./getAmountsSummary.spec";
 
-using PairPoolManager as PairPoolManager;
+// using PairPoolManager as PairPoolManager;
 using LendingPoolManager as LendingPoolManager;
 using MirrorTokenManager as MirrorTokenManager;
+using PairPoolManagerHarness as PairPoolManager;
 use rule removeLiquidityEndsWithZeroVirtualAccounting;
 use rule addLiquidityEndsWithZeroVirtualAccounting;
 use rule releaseEndsWithZeroVirtualAccounting;
@@ -229,3 +230,41 @@ rule alwaysRevert(method f) filtered{f -> alwaysReverting(f)}
 
     assert lastReverted;
 }*/
+
+rule marginDoesNotChangeBalances {
+    env e;
+    // calldataarg args;
+    address sender;
+    PairPoolManager.MarginParamsVo paramsVo;
+    PairPoolManager.MarginParams params = paramsVo.params;
+
+    uint256 preReserve0; 
+    uint256 preReserve1; 
+    (preReserve0, preReserve1) = getReserves(e, params.poolId);
+
+    margin(e, sender, paramsVo);
+
+    uint256 postReserve0; 
+    uint256 postReserve1; 
+    (postReserve0, postReserve1) = getReserves(e, params.poolId);
+
+    assert preReserve0 == postReserve0;
+    assert preReserve1 == postReserve1;
+}
+
+rule addLiquidityPreservesShares() {
+    env e;
+    PairPoolManager.AddLiquidityParams params;
+
+    uint256 preTotalSupply;
+    uint256 poolId = getPoolId(e, params.poolId);
+
+    (preTotalSupply, _, _) = getSupplies(e, poolId);
+
+    addLiquidity(e, params);
+
+    uint256 postTotalSupply;
+    (postTotalSupply, _, _) = getSupplies(e, poolId);
+
+    assert preTotalSupply <= postTotalSupply;
+}
