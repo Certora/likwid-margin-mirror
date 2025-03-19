@@ -11,8 +11,6 @@ methods {
         mulDivCVL(x,y,denominator,rounding);    
 
     function Math.mulDiv(uint256 x, uint256 y, uint256 denominator) internal returns (uint256) =>
-        // mulDivDownCVL_pessim(x,y,denominator);
-        // mulDivLIA(x,y,denominator);
         mulDivDownCVL(x,y,denominator);
 
     function Math.average(uint256 a, uint256 b) internal returns (uint256) => averageCVL(a,b);
