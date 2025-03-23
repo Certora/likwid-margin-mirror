@@ -1,6 +1,17 @@
---- src/PoolStatusManager.sol	2025-03-18 10:08:27.134398180 +0200
-+++ ./certora/patches/PoolStatusManager.sol	2025-03-18 10:08:19.374399419 +0200
-@@ -363,8 +363,8 @@
+--- src/PoolStatusManager.sol	2025-03-20 15:11:06.540053236 +0200
++++ ./certora/patches/PoolStatusManager.sol	2025-03-20 15:10:29.430059130 +0200
+@@ -124,6 +124,10 @@
+         (amountOut,,) = marginFees.getAmountOut(address(this), status, zeroForOne, amountIn);
+     }
+ 
++    function getKey(PoolId poolId) external view returns (PoolKey memory) {
++        return statusStore[poolId].key;
++    }
++
+     function _callSet() internal {
+         if (_notCallUpdate()) {
+             revert UpdateBalanceGuardErrorCall();
+@@ -363,8 +367,8 @@
          if (marginOracle != address(0)) {
              IMarginOracleWriter(marginOracle).write(status.key, _reserve0, _reserve1);
          }
@@ -11,7 +22,7 @@
              pooId,
              status.realReserve0,
              status.realReserve1,
-@@ -374,7 +374,7 @@
+@@ -374,7 +378,7 @@
              status.lendingRealReserve1,
              status.lendingMirrorReserve0,
              status.lendingMirrorReserve1

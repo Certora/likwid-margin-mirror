@@ -1,6 +1,7 @@
 import "./CVLERC20.spec";
 import "./MathSummary.spec";
 import "./PoolManager.spec";
+import "./PoolStatusManager.spec";
 
 using PairPoolManager as PairPoolManager;
 using LendingPoolManager as LendingPoolManager;
@@ -11,7 +12,7 @@ use rule releaseEndsWithZeroVirtualAccounting;
 use rule collectProtocolFeesEndsWithZeroVirtualAccounting;
 use rule swapMirrorEndsWithZeroVirtualAccounting;
 use rule marginEndsWithZeroVirtualAccounting;
-use invariant ValidStatusInitializedPools;
+use invariant ValidStatusInitializedPools filtered{f -> !calledByHook(f) && f.selector != sig:PairPoolManager.unlockCallback(bytes).selector}
 
 methods {
     /// Unresolved unlock callback:
@@ -39,8 +40,7 @@ methods {
 
 
     //  we don't have an implementation around for `IMarginOracleReader`, it seems
-    function _.observeNow(address /*IPairPoolManager*/ poolManager, PoolManager.PoolId id)
-        external
+    function _.observeNow(address /*IPairPoolManager*/ poolManager, PoolManager.PoolId id) external 
         => observeNowCVL() expect (uint224, uint256);
 
 
@@ -53,6 +53,9 @@ methods {
     // this is called on `e.msg.sender` in places, not sure how to link, so doing a manual dispatcher
     function _.pairPoolManager() external /* view returns (address) */ 
         => pairPoolManagerCVL(calledContract) expect address;
+
+    /// Has only internal effects in MirrorTokenManager.
+    function _.setOperator(address,bool) external => NONDET UNRESOLVED;
 
 }
 

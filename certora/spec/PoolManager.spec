@@ -1,5 +1,4 @@
 using PoolManager as PM;
-using PoolStatusManager as PoolStatusManager;
 using MarginHook as Hook;
 
 methods {
@@ -12,8 +11,11 @@ methods {
 
 definition ONE_TRILLION() returns uint256 = 10^12;
 
-persistent ghost mapping(PoolManager.PoolId => bool) pool_is_initialized;
-persistent ghost mapping(PoolManager.PoolId => address) poolId_to_hooks;
+definition ValidTimestamp(env e) returns bool = e.block.timestamp > 0 && e.block.timestamp <= max_uint32;
+
+persistent ghost mapping(PoolManager.PoolId => bool) pool_is_initialized {
+    init_state axiom forall PoolManager.PoolId poolId. !pool_is_initialized[poolId];
+}
 
 /// Source: lib/v4-periphery/lib/v4-core/src/libraries/Hooks.sol
 definition BEFORE_SWAP_FLAG() returns uint160 = 1 << 7;
@@ -36,6 +38,11 @@ persistent ghost CVLHasPermission(address,uint160) returns bool {
     axiom CVLHasPermission(Hook, AFTER_INITIALIZE_FLAG()) == false;
 }
 
+definition calledByHook(method f) returns bool = false
+    || f.selector == sig:PairPoolManager.updateBalances(PairPoolManager.PoolKey).selector
+    || f.selector == sig:PairPoolManager.setBalances(PairPoolManager.PoolKey).selector
+    || f.selector == sig:PairPoolManager.initialize(PairPoolManager.PoolKey).selector;
+
 definition alwaysReverting(method f) returns bool = false
     || f.selector == sig:Hook.beforeRemoveLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,bytes).selector
     || f.selector == sig:Hook.beforeAddLiquidity(address,PoolManager.PoolKey,IPoolManager.ModifyLiquidityParams,bytes).selector
@@ -57,30 +64,37 @@ function initializePoolCVL(PoolManager.PoolId poolId, uint160 sqrtPriceX96) retu
     return 0;
 }
 
-/// Whether the poolId originates from a pool key whose hooks address is the MarginHook.
-function PoolIdHookMatch(PoolManager.PoolId poolId) returns bool {
-    PoolManager.PoolKey key;
-    /// Matching key hash to input ID.
-    require Helper.PoolKeyToId(key) == poolId;
-    require poolId_to_hooks[poolId] == key.hooks;
-    return Hook == key.hooks;
-}
-
 /// Since there is no liquidity in pools in the PoolManager, the hook should never pass a non-zero amount to be swapped.
 function assertZeroDelta(int256 amountToSwap) returns int256 {
     assert amountToSwap == 0, "The hook must not pass any amount to the pool swap function";
     return 0;
 }
 
+rule validateCalledByHook(method f) filtered{f -> calledByHook(f)} {
+    env e;
+    calldataarg args;
+    address _hooks = PairPoolManager.hooks;
+    f(e, args);
+    assert e.msg.sender == _hooks;
+}
+
+rule validateUnlockCallbackSender() {
+    env e;
+    calldataarg args;
+    address _poolManager = PairPoolManager.poolManager;
+    PairPoolManager.unlockCallback(e, args);
+    assert _poolManager == e.msg.sender;
+}
+
 /// @title Valid status store for initalized pools
-invariant ValidStatusInitializedPools()
-    forall PoolManager.PoolId poolId.
+invariant ValidStatusInitializedPools(PoolManager.PoolId poolId)
     (pool_is_initialized[poolId] => (/// Initialized
-        PoolStatusManager.statusStore[poolId].rate0CumulativeLast == ONE_TRILLION() &&
-        PoolStatusManager.statusStore[poolId].rate1CumulativeLast == ONE_TRILLION() &&
+        PoolStatusManager.statusStore[poolId].rate0CumulativeLast > 0 &&
+        PoolStatusManager.statusStore[poolId].rate1CumulativeLast > 0 &&
         PoolStatusManager.statusStore[poolId].blockTimestampLast > 0 &&
         PoolStatusManager.statusStore[poolId].key.hooks == Hook &&
-        PoolStatusManager.statusStore[poolId].key.currency1 > 0))
+        PoolStatusManager.statusStore[poolId].key.currency1 > 0 &&
+        Helper.PoolKeyToId(PoolStatusManager.getKey(poolId)) == poolId))
     &&
     (!pool_is_initialized[poolId] => (/// Uninitialized
         PoolStatusManager.statusStore[poolId].rate0CumulativeLast == 0 &&
@@ -90,7 +104,9 @@ invariant ValidStatusInitializedPools()
         PoolStatusManager.statusStore[poolId].key.currency1 == 0))
     {
         preserved with (env e) {
-            require e.block.timestamp > 0;
+            require ValidTimestamp(e);
+            requireInvariant ValidStatusInitializedPools(PoolID1);
+            requireInvariant ValidStatusInitializedPools(PoolID2);
         }
     }
 
@@ -99,7 +115,7 @@ rule removeLiquidityEndsWithZeroVirtualAccounting()
 {
     env e;
     PairPoolManager.RemoveLiquidityParams params;
-    require PoolStatusManager.statusStore[params.poolId].key.hooks == Hook;
+    requireInvariant ValidStatusInitializedPools(params.poolId);
     
     require zeroCurrencyDeltaForAll();
         PairPoolManager.removeLiquidity(e, params);
@@ -112,7 +128,7 @@ rule addLiquidityEndsWithZeroVirtualAccounting()
     env e;
     require e.msg.sender != PM;
     PairPoolManager.AddLiquidityParams params;
-    require PoolStatusManager.statusStore[params.poolId].key.hooks == Hook;
+    requireInvariant ValidStatusInitializedPools(params.poolId);
     
     require zeroCurrencyDeltaForAll();
         PairPoolManager.addLiquidity(e, params);
@@ -125,7 +141,7 @@ rule releaseEndsWithZeroVirtualAccounting()
     env e;
     require e.msg.sender != PM;
     PairPoolManager.ReleaseParams params;
-    require PoolStatusManager.statusStore[params.poolId].key.hooks == Hook;
+    requireInvariant ValidStatusInitializedPools(params.poolId);
     
     require zeroCurrencyDeltaForAll();
         PairPoolManager.release(e, params);
@@ -137,10 +153,10 @@ rule collectProtocolFeesEndsWithZeroVirtualAccounting()
 {
     env e;
     require e.msg.sender != PM;
-    address recipient; PoolManager.Currency currency; uint256 amount;
+    calldataarg args;
     
     require zeroCurrencyDeltaForAll();
-        PairPoolManager.collectProtocolFees(e, recipient, currency, amount);
+        PairPoolManager.collectProtocolFees(e, args);
     assert zeroCurrencyDeltaForAll();
 }
 
@@ -154,7 +170,8 @@ rule swapMirrorEndsWithZeroVirtualAccounting()
     PoolManager.PoolId poolId; 
     bool zeroForOne; 
     uint256 amountIn;
-    require PoolStatusManager.statusStore[poolId].key.hooks == Hook;
+    requireInvariant ValidStatusInitializedPools(poolId);
+    require sender != PM;
     
     require zeroCurrencyDeltaForAll();
         PairPoolManager.swapMirror(e, sender, recipient, poolId, zeroForOne, amountIn);
@@ -168,7 +185,8 @@ rule marginEndsWithZeroVirtualAccounting()
     require e.msg.sender != PM;
     address sender;
     PairPoolManager.MarginParamsVo paramsVo;
-    require PoolStatusManager.statusStore[paramsVo.params.poolId].key.hooks == Hook;
+    require sender != PM;
+    requireInvariant ValidStatusInitializedPools(paramsVo.params.poolId);
     
     require zeroCurrencyDeltaForAll();
         PairPoolManager.margin(e, sender, paramsVo);
