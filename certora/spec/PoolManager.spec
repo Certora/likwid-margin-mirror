@@ -6,6 +6,7 @@ methods {
     /// Pure function is summarized by a generic arbitrary mapping - this is logically sound.
     function Hooks.hasPermission(address self, uint160 flag) internal returns (bool) => CVLHasPermission(self, flag);
     function Helper.PoolKeyToId(PoolManager.PoolKey) external returns (PoolManager.PoolId) envfree;
+    function Helper.toCurrency(address token) external returns (PoolManager.Currency) envfree; 
     function PM._initializePool(PoolManager.PoolId poolId, uint160 sqrtPriceX96) internal returns int24 => initializePoolCVL(poolId,sqrtPriceX96);
 }
 
@@ -174,6 +175,7 @@ rule swapMirrorEndsWithZeroVirtualAccounting()
     require sender != PM;
     
     require zeroCurrencyDeltaForAll();
+        //PM.sync(e, Helper.toCurrency(PM._synchedCurrency));
         PairPoolManager.swapMirror(e, sender, recipient, poolId, zeroForOne, amountIn);
     assert zeroCurrencyDeltaForAll();
 }
@@ -189,6 +191,7 @@ rule marginEndsWithZeroVirtualAccounting()
     requireInvariant ValidStatusInitializedPools(paramsVo.params.poolId);
     
     require zeroCurrencyDeltaForAll();
+        //PM.sync(e, Helper.toCurrency(PM._synchedCurrency));
         PairPoolManager.margin(e, sender, paramsVo);
     assert zeroCurrencyDeltaForAll();
 }

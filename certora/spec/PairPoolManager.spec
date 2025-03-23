@@ -58,6 +58,10 @@ methods {
     function _.setOperator(address,bool) external => NONDET UNRESOLVED;
 
 }
+/*methods {
+    function MarginFees.getAmountOut(address,PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountIn) external returns (uint256,uint24,uint256) => NONDET;
+    function MarginFees.getAmountIn(address,PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountOut) external returns (uint256,uint24,uint256) => NONDET;
+}*/
 
 function observeNowCVL() returns (uint224, uint256) {
     uint224 nondet1;
