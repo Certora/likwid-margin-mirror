@@ -1,25 +1,17 @@
-methods {
-    function getStatus(PoolIdLibrary.PoolId poolId) external returns (MarginHookManager.HookStatus memory) envfree;
-    function getReserves(PoolIdLibrary.PoolId poolId) external returns (uint256, uint256) envfree;
-    function getAmountIn(PoolIdLibrary.PoolId poolId, bool zeroForOne, uint256 amountOut) external returns (uint256 amountIn) envfree;
-    function getAmountOut(PoolIdLibrary.PoolId poolId, bool zeroForOne, uint256 amountIn) external returns (uint256 amountOut) envfree;
-}
-
 // In setup spec, add the following block
-/*
-methods {
-    function MarginHookManager._getAmountOut(MarginHookManager.HookStatus memory status, bool zeroForOne, uint256 amountIn) internal returns (uint256) with (env e)
+/*methods {
+    function MarginFees.getAmountOut(address,PoolStatusManager.PoolStatus memory status, bool zeroForOne, uint256 amountIn) external returns (uint256,uint24,uint256) with (env e)
         => getAmountOutCVL(e.block.timestamp, status, zeroForOne, amountIn);
 
-    function MarginHookManager._getAmountIn(MarginHookManager.HookStatus memory status, bool zeroForOne, uint256 amountOut) internal returns (uint256) with (env e)
+    function MarginFees.getAmountIn(address,PoolStatusManager.PoolStatus memory status, bool zeroForOne, uint256 amountOut) external returns (uint256,uint24,uint256) with (env e)
         => getAmountInCVL(e.block.timestamp, status, zeroForOne, amountOut);
-}
-*/
+}*/
 
-definition MAX_FEE_UNITS() returns uint256 = 10^6;
+definition MAX_FEE_UNITS() returns uint24 = 10^6;
+definition MAX_FEE_UNITS_MINUS_ONE() returns uint24 = 999999;
 
 /// CVL implementation of _getReserves()
-function getReservesByStatus(MarginHookManager.HookStatus status, bool zeroForOne) returns (uint256,uint256) {
+function getReservesByStatus(PoolStatusManager.PoolStatus status, bool zeroForOne) returns (uint256,uint256) {
     uint256 reserve0 = require_uint256(status.realReserve0 + status.mirrorReserve0);
     uint256 reserve1 = require_uint256(status.realReserve1 + status.mirrorReserve1);
     if(zeroForOne) {
@@ -29,36 +21,67 @@ function getReservesByStatus(MarginHookManager.HookStatus status, bool zeroForOn
 }
 
 function validReservesAndAmounts(uint256 amount, uint256 reserveX, uint256 reserveY) returns bool {
-    return amount > 0 && reserveX > 0 && reserveY > 0 && amount < reserveX;
+    return amount > 0 && reserveX > 0 && reserveY > 0;
 }
 
-/// Summary for _getAmountIn(HookStatus memory status, bool zeroForOne, uint256 amountOut)
-function getAmountInCVL(uint256 timestamp, MarginHookManager.HookStatus status, bool zeroForOne, uint256 amountOut) returns uint256 {
+/// Summary for MarginFees.getAmountIn(address _poolManager, PoolStatus memory status, bool zeroForOne, uint256 amountOut)
+function getAmountInCVL(uint256 timestamp, PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountOut) 
+returns (uint256,uint24,uint256) {
     uint256 reserveIn; uint256 reserveOut;
-    reserveIn, reserveOut = getReservesByStatus(status, zeroForOne)
+    reserveIn, reserveOut = getReservesByStatus(status, zeroForOne);
     require validReservesAndAmounts(amountOut, reserveOut, reserveIn);
-    /* Determinsic approach (has limited dependence) */
-    uint256 fee = dynamicFeeCVL(timestamp, status.marginTimestampLast, zeroForOne ? reserveIn : reserveOut, zeroForOne ? reserveOut : reserveIn);
-    /* Non-deterministic approach (unconstrained) */
-    //uint256 fee; require fee < MAX_FEE_UNITS();
-    return amountInCVL(amountOut, reserveOut, reserveIn, fee);
+    require amountOut < reserveOut;
+    /* Deterministic approach (has limited dependency) */
+    uint24 fee = dynamicFeeCVL(timestamp, status.marginTimestampLast, status.key.fee);
+
+    uint256 amountInWithoutFee = amountInNoFeeCVL(amountOut, reserveOut, reserveIn);
+    uint256 amountIn = attachedAmountInCVL(fee, amountInWithoutFee);
+    uint256 feeAmount = assert_uint256(amountIn - amountInWithoutFee);
+    return (amountIn, fee, feeAmount);
 }
 
-/// Summary for _getAmountOut(HookStatus memory status, bool zeroForOne, uint256 amountIn)
-function getAmountOutCVL(uint256 timestamp, MarginHookManager.HookStatus status, bool zeroForOne, uint256 amountIn) returns uint256 {
-    uint256 amountOut;
-    /// Complete the summary similarly to the getAmountInCVL()...
-    /// Pay attention to the roles of reserveIn and reserveOut!
-    return amountOut;
-} 
+/// Summary for MarginFees.getAmountOut(PoolStatus memory status, bool zeroForOne, uint256 amountIn)
+function getAmountOutCVL(uint256 timestamp, PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountIn) 
+returns (uint256,uint24,uint256) {
+    uint256 reserveIn; uint256 reserveOut;
+    reserveIn, reserveOut = getReservesByStatus(status, zeroForOne);
+    require validReservesAndAmounts(amountIn, reserveOut, reserveIn);
+    /* Deterministic approach (has limited dependency) */
+    uint24 fee = dynamicFeeCVL(timestamp, status.marginTimestampLast, status.key.fee);
+    uint256 feeAmount = feeAmountOutCVL(fee, amountIn);
+    uint256 deducted = assert_uint256(amountIn - feeAmount);
+    return (amountOutCVL(deducted, reserveOut, reserveIn), fee, feeAmount);
+}
 
-/// Ghost summary for MarginFees.dynamicFee(status) - assumes dependence on four parameters only.
-ghost dynamicFeeCVL(uint256 /* timestamp */, uint256 /* last timestamp */, uint256 /* reserve0 */, uint256 /* reserve1 */) returns uint256 {
-    axiom forall uint256 timestamp. forall uint256 lastTimestmap. forall uint256 reserve0. forall uint256 reserve1.
-        dynamicFeeCVL(timestamp,lastTimestmap,reserve0,reserve1) < MAX_FEE_UNITS();
+/// Ghost summary for MarginFees.dynamicFee(status) - assumes dependency on three parameters only.
+ghost dynamicFeeCVL(uint256 /* timestamp */, uint256 /* last timestamp */, uint24 /* fee */) returns uint24 {
+    axiom forall uint256 timestamp. forall uint256 lastTimestmap. forall uint24 fee.
+        /// In an extreme case, the dynamic fee can actually be equal to MAX_FEE_UNITS(), but it will brick the function.
+        /// We ignore this case for now as it isn't realistic.
+        dynamicFeeCVL(timestamp,lastTimestmap,fee) < MAX_FEE_UNITS();
 }
 
 /// Ghost summary for amounts based on reserves and fees
-/// Think of axioms for limiting the behavior of the ghosts.
-ghost amountInCVL(uint256 /* amountOut */, uint256 /* reserveOut */, uint256 /* reserveIn */ , uint256 /* fee */) returns uint256;
-ghost amountOutCVL(uint256 /* amountIn */, uint256 /* reserveIn */, uint256 /* reserveOut */ , uint256 /* fee */) returns uint256;
+ghost amountInNoFeeCVL(uint256 /* amountOut */, uint256 /* reserveOut */, uint256 /* reserveIn */) returns uint256;
+ghost amountOutCVL(uint256 /* deducted */, uint256 /* reserveOut */, uint256 /* reserveIn */) returns uint256;
+
+ghost attachedAmountInCVL(uint24 /* fee */, uint256 /* amountInNoFees */) returns uint256 {
+    axiom forall uint24 fee. forall uint256 amount.
+        fee < MAX_FEE_UNITS() => attachedAmountInCVL(fee,amount) >= amount;
+
+    axiom forall uint256 amount. attachedAmountInCVL(0, amount) == amount && 
+        attachedAmountInCVL(MAX_FEE_UNITS_MINUS_ONE(), amount) == amount * MAX_FEE_UNITS();
+
+    axiom forall uint256 amount. forall uint24 fee1. forall uint24 fee2.
+        fee1 < fee2 && fee2 < MAX_FEE_UNITS() => attachedAmountInCVL(fee1, amount) <= attachedAmountInCVL(fee2, amount);
+}
+
+ghost feeAmountOutCVL(uint24 /* fee */, uint256 /* amountIn */) returns uint256 {
+    axiom forall uint24 fee. forall uint256 amount.
+        fee < MAX_FEE_UNITS() => feeAmountOutCVL(fee,amount) <= amount;
+
+    axiom forall uint256 amount. feeAmountOutCVL(0, amount) == 0;
+
+    axiom forall uint256 amount. forall uint24 fee1. forall uint24 fee2.
+        fee1 < fee2 && fee2 < MAX_FEE_UNITS() => feeAmountOutCVL(fee1, amount) <= feeAmountOutCVL(fee2, amount);
+}

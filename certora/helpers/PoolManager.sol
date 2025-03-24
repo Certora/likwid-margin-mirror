@@ -170,6 +170,7 @@ contract PoolManager is IPoolManagerLight, ERC6909Claims {
 
     /// @inheritdoc IPoolManagerLight
     function initialize(PoolKey memory key, uint160 sqrtPriceX96) external returns (int24 tick) {
+        if (key.currency0 >= key.currency1) revert("Wrong order");
         Hooks.beforeInitialize(key.hooks, key, sqrtPriceX96);
             PoolId id = PoolIdLibrary.toId(key);
             tick = _initializePool(id, sqrtPriceX96);

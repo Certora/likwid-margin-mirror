@@ -1,7 +1,7 @@
 import "./CVLMath.spec";
 /*
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ Summarization of Open-Zeppelin Math library (pessimistic, requires denominator is non-zero)                                                                                  
+│ Summarization of Open-Zeppelin Math library (optimistic, requires denominator is non-zero)                                                                                  
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 */
 
