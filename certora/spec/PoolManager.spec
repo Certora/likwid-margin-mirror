@@ -12,6 +12,8 @@ methods {
 
 definition ONE_TRILLION() returns uint256 = 10^12;
 
+definition MAX_FEE() returns uint24 = 10^6;
+
 definition ValidTimestamp(env e) returns bool = e.block.timestamp > 0 && e.block.timestamp <= max_uint32;
 
 persistent ghost mapping(PoolManager.PoolId => bool) pool_is_initialized {
@@ -95,6 +97,9 @@ invariant ValidStatusInitializedPools(PoolManager.PoolId poolId)
         PoolStatusManager.statusStore[poolId].blockTimestampLast > 0 &&
         PoolStatusManager.statusStore[poolId].key.hooks == Hook &&
         PoolStatusManager.statusStore[poolId].key.currency1 > 0 &&
+            PoolStatusManager.statusStore[poolId].key.currency1 > 
+            PoolStatusManager.statusStore[poolId].key.currency0 &&
+        PoolStatusManager.statusStore[poolId].key.fee <= MAX_FEE() &&
         Helper.PoolKeyToId(PoolStatusManager.getKey(poolId)) == poolId))
     &&
     (!pool_is_initialized[poolId] => (/// Uninitialized
@@ -102,7 +107,9 @@ invariant ValidStatusInitializedPools(PoolManager.PoolId poolId)
         PoolStatusManager.statusStore[poolId].rate1CumulativeLast == 0 &&
         PoolStatusManager.statusStore[poolId].blockTimestampLast == 0 &&
         PoolStatusManager.statusStore[poolId].key.hooks == 0 &&
-        PoolStatusManager.statusStore[poolId].key.currency1 == 0))
+        PoolStatusManager.statusStore[poolId].key.currency1 == 0 &&
+        PoolStatusManager.statusStore[poolId].key.currency0 == 0 &&
+        PoolStatusManager.statusStore[poolId].key.fee == 0))
     {
         preserved with (env e) {
             require ValidTimestamp(e);
