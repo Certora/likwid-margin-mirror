@@ -42,8 +42,8 @@ persistent ghost CVLHasPermission(address,uint160) returns bool {
 }
 
 definition calledByHook(method f) returns bool = false
-    || f.selector == sig:PairPoolManager.updateBalances(PairPoolManager.PoolKey).selector
-    || f.selector == sig:PairPoolManager.setBalances(PairPoolManager.PoolKey).selector
+    //|| f.selector == sig:PairPoolManager.updateBalances(PairPoolManager.PoolKey).selector
+    //|| f.selector == sig:PairPoolManager.setBalances(PoolManager.PoolId).selector
     || f.selector == sig:PairPoolManager.initialize(PairPoolManager.PoolKey).selector;
 
 definition alwaysReverting(method f) returns bool = false
@@ -149,10 +149,12 @@ rule releaseEndsWithZeroVirtualAccounting()
     env e;
     require e.msg.sender != PM;
     PairPoolManager.ReleaseParams params;
+    PoolStatusManager.PoolStatus status;
+    require Helper.PoolKeyToId(status.key) == params.poolId;
     requireInvariant ValidStatusInitializedPools(params.poolId);
     
     require zeroCurrencyDeltaForAll();
-        PairPoolManager.release(e, params);
+        PairPoolManager.release(e, status, params);
     assert zeroCurrencyDeltaForAll();
 }
 
@@ -193,12 +195,14 @@ rule marginEndsWithZeroVirtualAccounting()
     env e;
     require e.msg.sender != PM;
     address sender;
+    PoolStatusManager.PoolStatus status;
     PairPoolManager.MarginParamsVo paramsVo;
     require sender != PM;
+    require Helper.PoolKeyToId(status.key) == paramsVo.params.poolId;
     requireInvariant ValidStatusInitializedPools(paramsVo.params.poolId);
     
     require zeroCurrencyDeltaForAll();
         //PM.sync(e, Helper.toCurrency(PM._synchedCurrency));
-        PairPoolManager.margin(e, sender, paramsVo);
+        PairPoolManager.margin(e, sender, status, paramsVo);
     assert zeroCurrencyDeltaForAll();
 }

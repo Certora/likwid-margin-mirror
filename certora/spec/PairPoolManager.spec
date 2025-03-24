@@ -26,10 +26,10 @@ methods {
     ] default HAVOC_ECF;
     /// Unresolved unlock callbacks (PairPoolManager):
     unresolved external in PairPoolManager.unlockCallback(bytes) => DISPATCH [
-        PairPoolManager.handleRelease(PairPoolManager.ReleaseParams),
+        PairPoolManager.handleRelease(PoolStatusManager.PoolStatus,PairPoolManager.ReleaseParams),
         PairPoolManager.handleAddLiquidity(address,PoolManager.PoolKey,uint256,uint256),
         PairPoolManager.handleRemoveLiquidity(address,PoolManager.PoolKey,uint256,uint256),
-        PairPoolManager.handleMargin(address,address,PairPoolManager.MarginParamsVo),
+        PairPoolManager.handleMargin(address,address,PoolStatusManager.PoolStatus,PairPoolManager.MarginParamsVo),
         PairPoolManager.handleSwapMirror(address,PoolManager.Currency,uint256),
         PairPoolManager.handleCollectFees(address,PoolManager.Currency ,uint256)
     ] default HAVOC_ECF;
@@ -41,7 +41,7 @@ methods {
 
 
     //  we don't have an implementation around for `IMarginOracleReader`, it seems
-    function _.observeNow(address /*IPairPoolManager*/ poolManager, PoolManager.PoolId id) external 
+    function _.observeNow(address /*IPairPoolManager*/, PoolStatusManager.PoolStatus /*status*/) external 
         => observeNowCVL() expect (uint224, uint256);
 
 
@@ -61,10 +61,10 @@ methods {
 }
 
 methods {
-    function MarginFees.getAmountOut(address,PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountIn) external returns (uint256,uint24,uint256) with (env e)
+    function PoolStatusManager.getAmountOut(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountIn) external returns (uint256,uint24,uint256) with (env e)
         => getAmountOutCVL(e.block.timestamp, status, zeroForOne, amountIn) DELETE;
 
-    function MarginFees.getAmountIn(address,PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountOut) external returns (uint256,uint24,uint256) with (env e)
+    function PoolStatusManager.getAmountIn(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountOut) external returns (uint256,uint24,uint256) with (env e)
         => getAmountInCVL(e.block.timestamp, status, zeroForOne, amountOut) DELETE;
 }
 
@@ -77,10 +77,20 @@ function observeNowCVL() returns (uint224, uint256) {
 function pairPoolManagerCVL(address callee) returns address {
     if (callee == PoolStatusManager) {
         return PoolStatusManager.pairPoolManager; 
+    } else if(callee == LendingPoolManager) {
+        return LendingPoolManager.pairPoolManager;
     } else {
         assert false;
         return 0;
     }
+}
+
+rule setBalancesCorrectPoolId(PoolManager.PoolId poolId) 
+{
+    env e;
+    requireInvariant ValidStatusInitializedPools(poolId);
+    PoolStatusManager.PoolStatus status = PairPoolManager.setBalances(e, poolId);
+    assert Helper.PoolKeyToId(status.key) == poolId;
 }
 
 // excluding methods whose body is just `revert <msg>';

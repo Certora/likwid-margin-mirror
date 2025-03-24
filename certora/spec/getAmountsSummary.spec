@@ -1,9 +1,9 @@
 // In setup spec, add the following block
 /*methods {
-    function MarginFees.getAmountOut(address,PoolStatusManager.PoolStatus memory status, bool zeroForOne, uint256 amountIn) external returns (uint256,uint24,uint256) with (env e)
+    function PoolStatusManager.getAmountOut(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountIn) external returns (uint256,uint24,uint256) with (env e)
         => getAmountOutCVL(e.block.timestamp, status, zeroForOne, amountIn);
 
-    function MarginFees.getAmountIn(address,PoolStatusManager.PoolStatus memory status, bool zeroForOne, uint256 amountOut) external returns (uint256,uint24,uint256) with (env e)
+    function PoolStatusManager.getAmountIn(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountOut) external returns (uint256,uint24,uint256) with (env e)
         => getAmountInCVL(e.block.timestamp, status, zeroForOne, amountOut);
 }*/
 
