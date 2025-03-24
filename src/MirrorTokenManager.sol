@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.26;
 
 import {Owned} from "solmate/src/auth/Owned.sol";
@@ -31,6 +31,12 @@ contract MirrorTokenManager is IMirrorTokenManager, ERC6909Accrues, Owned {
     function mintInStatus(address receiver, uint256 id, uint256 amount) external onlyStatusManager {
         unchecked {
             _mint(receiver, id, amount);
+        }
+    }
+
+    function burn(uint256 id, uint256 amount) external onlyStatusManager {
+        unchecked {
+            _burn(msg.sender, id, amount);
         }
     }
 

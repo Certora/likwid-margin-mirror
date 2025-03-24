@@ -23,7 +23,6 @@ import {TimeLibrary} from "./libraries/TimeLibrary.sol";
 import {LiquidityLevel} from "./libraries/LiquidityLevel.sol";
 import {PerLibrary} from "./libraries/PerLibrary.sol";
 import {FeeLibrary} from "./libraries/FeeLibrary.sol";
-import {MarginPosition} from "./types/MarginPosition.sol";
 import {MarginParams, MarginParamsVo} from "./types/MarginParams.sol";
 import {ReleaseParams} from "./types/ReleaseParams.sol";
 import {BalanceStatus} from "./types/BalanceStatus.sol";
@@ -52,6 +51,7 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
     error InsufficientLiquidityMinted();
     error InsufficientLiquidityBurnt();
     error NotPositionManager();
+    error NotAllowed();
 
     event Initialize(
         PoolId indexed id,
@@ -73,6 +73,14 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
     );
     event Burn(
         PoolId indexed poolId, address indexed sender, uint256 liquidity, uint256 amount0, uint256 amount1, uint8 level
+    );
+    event Release(
+        PoolId indexed poolId,
+        Currency indexed borrowCurrency,
+        uint256 debtAmount,
+        uint256 repayAmount,
+        uint256 burnAmount,
+        uint256 rawBorrowAmount
     );
 
     IMirrorTokenManager public immutable mirrorTokenManager;
@@ -96,6 +104,7 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
         lendingPoolManager = _lendingPoolManager;
         marginLiquidity = _marginLiquidity;
         marginFees = _marginFees;
+        poolManager.setOperator(address(lendingPoolManager), true);
         mirrorTokenManager.setOperator(address(lendingPoolManager), true);
     }
 
@@ -134,12 +143,12 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
 
     function getAmountIn(PoolId poolId, bool zeroForOne, uint256 amountOut) external view returns (uint256 amountIn) {
         PoolStatus memory status = statusManager.getStatus(poolId);
-        (amountIn,,) = marginFees.getAmountIn(address(this), status, zeroForOne, amountOut);
+        (amountIn,,) = statusManager.getAmountIn(status, zeroForOne, amountOut);
     }
 
     function getAmountOut(PoolId poolId, bool zeroForOne, uint256 amountIn) external view returns (uint256 amountOut) {
         PoolStatus memory status = statusManager.getStatus(poolId);
-        (amountOut,,) = marginFees.getAmountOut(address(this), status, zeroForOne, amountIn);
+        (amountOut,,) = statusManager.getAmountOut(status, zeroForOne, amountIn);
     }
 
     // ******************** HOOK CALL ********************
@@ -147,14 +156,6 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
     function initialize(PoolKey calldata key) external onlyHooks {
         statusManager.initialize(key);
         emit Initialize(key.toId(), key.currency0, key.currency1, key.fee, key.tickSpacing, key.hooks);
-    }
-
-    function setBalances(PoolKey calldata key) external onlyHooks {
-        statusManager.setBalances(key);
-    }
-
-    function updateBalances(PoolKey calldata key) external onlyHooks {
-        statusManager.update(key);
     }
 
     function swap(address sender, PoolKey calldata key, IPoolManager.SwapParams calldata params)
@@ -177,11 +178,11 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
         uint256 feeAmount;
         if (exactInput) {
             (unspecifiedAmount, swapFee, feeAmount) =
-                marginFees.getAmountOut(address(this), _status, params.zeroForOne, specifiedAmount);
+                statusManager.getAmountOut(_status, params.zeroForOne, specifiedAmount);
             poolManager.approve(address(hooks), unspecified.toId(), unspecifiedAmount);
         } else {
             (unspecifiedAmount, swapFee, feeAmount) =
-                marginFees.getAmountIn(address(this), _status, params.zeroForOne, specifiedAmount);
+                statusManager.getAmountIn(_status, params.zeroForOne, specifiedAmount);
             poolManager.approve(address(hooks), specified.toId(), specifiedAmount);
         }
         if (feeAmount > 0) {
@@ -199,9 +200,7 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
         ensure(params.deadline)
         returns (uint256 liquidity)
     {
-        require(params.amount0 > 0 && params.amount1 > 0, "AMOUNT_ERR");
-        PoolStatus memory status = statusManager.getStatus(params.poolId);
-        statusManager.setBalances(status.key);
+        PoolStatus memory status = statusManager.setBalances(params.poolId);
         uint256 uPoolId = marginLiquidity.getPoolId(params.poolId);
         uint256 amount0In;
         uint256 amount1In;
@@ -221,9 +220,9 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
             }
             if (liquidity == 0) revert InsufficientLiquidityMinted();
         }
-        liquidity = marginLiquidity.addLiquidity(params.to, uPoolId, params.level, liquidity);
+        marginLiquidity.addLiquidity(params.to, uPoolId, params.level, liquidity);
         poolManager.unlock(abi.encodeCall(this.handleAddLiquidity, (msg.sender, status.key, amount0In, amount1In)));
-        statusManager.update(status.key, false);
+        statusManager.update(params.poolId, false);
         emit Mint(params.poolId, msg.sender, params.to, liquidity, amount0In, amount1In, params.level);
     }
 
@@ -244,13 +243,12 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
         ensure(params.deadline)
         returns (uint256 amount0, uint256 amount1)
     {
-        PoolStatus memory status = statusManager.getStatus(params.poolId);
-        statusManager.setBalances(status.key);
+        PoolStatus memory status = statusManager.setBalances(params.poolId);
         uint256 uPoolId = marginLiquidity.getPoolId(params.poolId);
         {
             (uint256 _reserve0, uint256 _reserve1) = status.getReserves();
             (uint256 _totalSupply, uint256 retainSupply0, uint256 retainSupply1) = marginLiquidity.getSupplies(uPoolId);
-            params.liquidity = marginLiquidity.removeLiquidity(msg.sender, uPoolId, params.level, params.liquidity);
+            marginLiquidity.removeLiquidity(msg.sender, uPoolId, params.level, params.liquidity);
             uint256 maxReserve0 = status.realReserve0;
             uint256 maxReserve1 = status.realReserve1;
             amount0 = Math.mulDiv(params.liquidity, _reserve0, _totalSupply);
@@ -278,7 +276,7 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
         }
 
         poolManager.unlock(abi.encodeCall(this.handleRemoveLiquidity, (msg.sender, status.key, amount0, amount1)));
-        statusManager.update(status.key);
+        statusManager.update(params.poolId);
         emit Burn(params.poolId, msg.sender, params.liquidity, amount0, amount1, params.level);
     }
 
@@ -300,7 +298,9 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
     }
 
     function setStatusManager(IPoolStatusManager _poolStatusManager) external onlyOwner {
-        statusManager = _poolStatusManager;
+        if (address(statusManager) == address(0)) {
+            statusManager = _poolStatusManager;
+        }
     }
 
     function addPositionManager(address _marginPositionManager) external onlyOwner {
@@ -313,27 +313,30 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
 
     // ******************** MARGIN FUNCTIONS ********************
 
-    /// @inheritdoc IPairPoolManager
-    function margin(address sender, MarginParamsVo memory paramsVo)
+    function setBalances(PoolId poolId) external onlyPosition returns (PoolStatus memory _status) {
+        _status = statusManager.setBalances(poolId);
+    }
+
+    function margin(address sender, PoolStatus memory status, MarginParamsVo memory paramsVo)
         external
         payable
         onlyPosition
         returns (MarginParamsVo memory)
     {
-        bytes memory result = poolManager.unlock(abi.encodeCall(this.handleMargin, (msg.sender, sender, paramsVo)));
+        bytes memory result =
+            poolManager.unlock(abi.encodeCall(this.handleMargin, (msg.sender, sender, status, paramsVo)));
         (paramsVo.params.marginAmount, paramsVo.marginTotal, paramsVo.params.borrowAmount) =
             abi.decode(result, (uint256, uint256, uint256));
         return paramsVo;
     }
 
-    function handleMargin(address _positionManager, address sender, MarginParamsVo calldata paramsVo)
-        external
-        selfOnly
-        returns (uint256 marginAmount, uint256 marginWithoutFee, uint256 borrowAmount)
-    {
+    function handleMargin(
+        address _positionManager,
+        address sender,
+        PoolStatus memory status,
+        MarginParamsVo calldata paramsVo
+    ) external selfOnly returns (uint256 marginAmount, uint256 marginWithoutFee, uint256 borrowAmount) {
         MarginParams memory params = paramsVo.params;
-        PoolStatus memory status = statusManager.getStatus(params.poolId);
-        statusManager.setBalances(status.key);
         (Currency borrowCurrency, Currency marginCurrency) = params.marginForOne
             ? (status.key.currency0, status.key.currency1)
             : (status.key.currency1, status.key.currency0);
@@ -341,40 +344,17 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
         // transfer marginAmount to lendingPoolManager
         marginCurrency.settle(poolManager, sender, params.marginAmount, false);
         marginCurrency.take(poolManager, address(this), params.marginAmount, true);
-        poolManager.approve(address(lendingPoolManager), marginCurrency.toId(), params.marginAmount);
         marginAmount = lendingPoolManager.realIn(_positionManager, params.poolId, marginCurrency, params.marginAmount);
         if (params.leverage > 0) {
-            uint256 marginReserves;
-            uint256 incrementMaxMirror;
-            {
-                (
-                    uint256 marginReserve0,
-                    uint256 marginReserve1,
-                    uint256 incrementMaxMirror0,
-                    uint256 incrementMaxMirror1
-                ) = marginLiquidity.getMarginReserves(address(this), params.poolId, status);
-                marginReserves = params.marginForOne ? marginReserve1 : marginReserve0;
-                incrementMaxMirror = params.marginForOne ? incrementMaxMirror0 : incrementMaxMirror1;
-            }
-            {
-                uint256 marginTotal = params.marginAmount * params.leverage;
-                require(marginReserves >= marginTotal, "MARGIN_NOT_ENOUGH");
-                (borrowAmount,,) = marginFees.getAmountIn(address(this), status, params.marginForOne, marginTotal);
-                require(incrementMaxMirror >= borrowAmount, "MIRROR_TOO_MUCH");
-                (, uint24 marginFee) = marginFees.getPoolFees(address(this), params.poolId);
-                (marginWithoutFee, marginFeeAmount) = marginFee.deduct(marginTotal);
-            }
+            (marginWithoutFee, marginFeeAmount, borrowAmount) = marginFees.getMarginBorrow(status, params);
             // transfer marginTotal to lendingPoolManager
-            poolManager.approve(address(lendingPoolManager), marginCurrency.toId(), marginWithoutFee);
             marginWithoutFee =
                 lendingPoolManager.realIn(_positionManager, params.poolId, marginCurrency, marginWithoutFee);
         } else {
             {
-                uint256 actualAmount = params.marginAmount.mulMillionDiv(paramsVo.minMarginLevel);
-                (uint256 reserve0, uint256 reserve1) = status.getReserves();
-                (uint256 reserveBorrow, uint256 reserveMargin) =
-                    params.marginForOne ? (reserve0, reserve1) : (reserve1, reserve0);
-                uint256 borrowMaxAmount = Math.mulDiv(actualAmount, reserveBorrow, reserveMargin);
+                uint256 borrowMaxAmount = marginFees.getBorrowMaxAmount(
+                    status, params.marginAmount, params.marginForOne, paramsVo.minMarginLevel
+                );
                 if (params.borrowAmount > 0) {
                     borrowAmount = Math.min(borrowMaxAmount, params.borrowAmount);
                 } else {
@@ -396,70 +376,93 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
 
         // mint mirror token
         mirrorTokenManager.mint(borrowCurrency.toTokenId(params.poolId), borrowAmount);
-        BalanceStatus memory balanceStatus = statusManager.update(status.key, true);
-        {
-            bool exchangeBalance0 = balanceStatus.mirrorBalance0 > 0 && balanceStatus.lendingBalance0 > 0;
-            bool exchangeBalance1 = balanceStatus.mirrorBalance1 > 0 && balanceStatus.lendingBalance1 > 0;
-            if (exchangeBalance0 || exchangeBalance1) {
-                statusManager.setBalances(status.key);
-                if (exchangeBalance0) {
-                    lendingPoolManager.mirrorInRealOut(
-                        params.poolId, status.key.currency0, balanceStatus.mirrorBalance0
-                    );
-                }
-                if (exchangeBalance1) {
-                    lendingPoolManager.mirrorInRealOut(
-                        params.poolId, status.key.currency1, balanceStatus.mirrorBalance1
-                    );
-                }
-                statusManager.update(status.key, false);
-            }
+        (uint256 mirrorBalance0, uint256 mirrorBalance1) = borrowCurrency == status.key.currency0
+            ? (borrowAmount + status.mirrorReserve0, uint256(status.mirrorReserve1))
+            : (uint256(status.mirrorReserve0), borrowAmount + status.mirrorReserve1);
+        if (mirrorBalance0 > 0) {
+            lendingPoolManager.mirrorInRealOut(params.poolId, status.key.currency0, mirrorBalance0);
         }
+        if (mirrorBalance1 > 0) {
+            lendingPoolManager.mirrorInRealOut(params.poolId, status.key.currency1, mirrorBalance1);
+        }
+        statusManager.update(params.poolId, true);
     }
 
-    /// @inheritdoc IPairPoolManager
-    function release(ReleaseParams memory params) external payable onlyPosition returns (uint256) {
-        bytes memory result = poolManager.unlock(abi.encodeCall(this.handleRelease, (params)));
+    function _releaseToPool(
+        ReleaseParams calldata params,
+        PoolStatus memory status,
+        Currency borrowCurrency,
+        uint256 repayAmount
+    ) internal {
+        uint256 borrowTokenId = borrowCurrency.toTokenId(params.poolId);
+        // burn mirror token
+        (uint256 pairAmount, uint256 lendingAmount) = mirrorTokenManager.burn(
+            address(lendingPoolManager), borrowCurrency.toTokenId(params.poolId), params.debtAmount
+        );
+        uint256 burnAmount = pairAmount + lendingAmount;
+        int256 diff = repayAmount.toInt256() - params.debtAmount.toInt256();
+        if (diff != 0) {
+            (int256 interest0, int256 interest1, int256 lendingInterest) =
+                marginFees.computeDiff(address(this), status, params.marginForOne, diff);
+            if (interest0 != 0 || interest1 != 0) {
+                marginLiquidity.changeLiquidity(
+                    params.poolId, status.reserve0(), status.reserve1(), interest0, interest1
+                );
+            }
+            if (lendingInterest != 0) {
+                lendingPoolManager.updateInterests(borrowTokenId, lendingInterest);
+                lendingInterest += lendingAmount.toInt256();
+                if (lendingInterest > 0) {
+                    poolManager.transfer(address(lendingPoolManager), borrowCurrency.toId(), uint256(lendingInterest));
+                } else {
+                    lendingPoolManager.balanceAccounts(borrowCurrency, uint256(-lendingInterest));
+                }
+            }
+        } else {
+            poolManager.transfer(address(lendingPoolManager), borrowCurrency.toId(), lendingAmount);
+        }
+
+        emit Release(params.poolId, borrowCurrency, params.debtAmount, repayAmount, burnAmount, params.rawBorrowAmount);
+    }
+
+    function release(PoolStatus memory status, ReleaseParams memory params)
+        external
+        payable
+        onlyPosition
+        returns (uint256)
+    {
+        bytes memory result = poolManager.unlock(abi.encodeCall(this.handleRelease, (status, params)));
         return abi.decode(result, (uint256));
     }
 
-    function handleRelease(ReleaseParams calldata params) external selfOnly returns (uint256) {
-        PoolStatus memory status = statusManager.getStatus(params.poolId);
-        statusManager.updateInterests(status.key);
-        statusManager.setBalances(status.key);
+    function handleRelease(PoolStatus memory status, ReleaseParams calldata params)
+        external
+        selfOnly
+        returns (uint256)
+    {
         (Currency borrowCurrency, Currency marginCurrency) = params.marginForOne
             ? (status.key.currency0, status.key.currency1)
             : (status.key.currency1, status.key.currency0);
-        uint256 interest;
+        // take repayAmount borrowCurrency from the pool
+        uint256 repayAmount = params.repayAmount;
         if (params.releaseAmount > 0) {
+            if (repayAmount == 0) {
+                (repayAmount,,) = statusManager.getAmountOut(status, !params.marginForOne, params.releaseAmount);
+            }
+
             // release margin
             lendingPoolManager.realOut(params.payer, params.poolId, marginCurrency, params.releaseAmount);
-            if (params.repayAmount > params.rawBorrowAmount) {
-                uint256 overRepay = params.repayAmount - params.rawBorrowAmount;
-                interest = Math.mulDiv(overRepay, params.releaseAmount, params.repayAmount);
-            }
-        } else if (params.repayAmount > 0) {
+        } else if (repayAmount > 0) {
             // repay borrow
-            borrowCurrency.settle(poolManager, params.payer, params.repayAmount, false);
-            borrowCurrency.take(poolManager, address(this), params.repayAmount, true);
-            if (params.repayAmount > params.rawBorrowAmount) {
-                interest = params.repayAmount - params.rawBorrowAmount;
-            }
+            borrowCurrency.settle(poolManager, params.payer, repayAmount, false);
+            borrowCurrency.take(poolManager, address(this), repayAmount, true);
         }
-        // burn mirror token
-        (uint256 pairAmount, uint256 lendingAmount) = mirrorTokenManager.burn(
-            address(lendingPoolManager), borrowCurrency.toTokenId(params.poolId), params.repayAmount
-        );
-        if (params.repayAmount > pairAmount) {
-            lendingAmount = Math.min(lendingAmount, params.repayAmount - pairAmount);
-            poolManager.transfer(address(lendingPoolManager), borrowCurrency.toId(), lendingAmount);
-        }
-        if (interest > 0) {
-            interest = statusManager.updateProtocolFees(borrowCurrency, interest);
-        }
-        statusManager.update(status.key, true);
-        return params.repayAmount;
+        _releaseToPool(params, status, borrowCurrency, repayAmount);
+        statusManager.update(params.poolId, true);
+        return repayAmount;
     }
+
+    // ******************** EXTERNAL FUNCTIONS ********************
 
     function mirrorInRealOut(PoolId poolId, Currency currency, uint256 amount)
         external
@@ -469,17 +472,16 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
         uint256 id = currency.toId();
         uint256 balance = poolManager.balanceOf(address(this), id);
         if (balance > amount) {
-            PoolStatus memory status = statusManager.getStatus(poolId);
+            PoolStatus memory status = statusManager.setBalances(poolId);
             (,, uint256 incrementMaxMirror0, uint256 incrementMaxMirror1) =
                 marginLiquidity.getMarginReserves(address(this), poolId, status);
             uint256 incrementMaxMirror = status.key.currency0 == currency ? incrementMaxMirror0 : incrementMaxMirror1;
             if (incrementMaxMirror >= amount) {
-                statusManager.setBalances(status.key);
                 poolManager.transfer(msg.sender, id, amount);
                 mirrorTokenManager.transferFrom(msg.sender, address(this), currency.toTokenId(poolId), amount);
-                statusManager.update(status.key);
                 success = true;
             }
+            statusManager.update(poolId);
         }
     }
 
@@ -488,9 +490,9 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
         payable
         returns (uint256 amountOut)
     {
-        PoolStatus memory status = statusManager.getStatus(poolId);
+        PoolStatus memory status = statusManager.setBalances(poolId);
         uint256 feeAmount;
-        (amountOut,, feeAmount) = marginFees.getAmountOut(address(this), status, zeroForOne, amountIn);
+        (amountOut,, feeAmount) = statusManager.getAmountOut(status, zeroForOne, amountIn);
         uint256 mirrorOut = zeroForOne ? status.mirrorReserve1 : status.mirrorReserve0;
         require(amountOut <= mirrorOut, "NOT_ENOUGH_RESERVE");
         (Currency inputCurrency, Currency outputCurrency) =
@@ -502,14 +504,13 @@ contract PairPoolManager is IPairPoolManager, BaseFees, BasePoolManager {
                 transferNative(sender, msg.value - sendValue);
             }
         }
-        statusManager.setBalances(status.key);
         poolManager.unlock(abi.encodeCall(this.handleSwapMirror, (sender, inputCurrency, amountIn)));
         lendingPoolManager.mirrorIn(recipient, poolId, outputCurrency, amountOut);
-        statusManager.update(status.key);
         if (feeAmount > 0) {
             feeAmount = statusManager.updateProtocolFees(inputCurrency, feeAmount);
             emit Fees(poolId, inputCurrency, sender, uint8(FeeType.SWAP), feeAmount);
         }
+        statusManager.update(poolId);
     }
 
     function handleSwapMirror(address sender, Currency currency, uint256 amount) external selfOnly {

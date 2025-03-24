@@ -15,7 +15,6 @@ import {PriceMath} from "./libraries/PriceMath.sol";
 import {PerLibrary} from "./libraries/PerLibrary.sol";
 import {FeeLibrary} from "./libraries/FeeLibrary.sol";
 import {MarginPosition, MarginPositionVo} from "./types/MarginPosition.sol";
-import {BurnParams} from "./types/BurnParams.sol";
 import {IStatusBase} from "./interfaces/IStatusBase.sol";
 import {IPairMarginManager} from "./interfaces/IPairMarginManager.sol";
 import {IPairPoolManager} from "./interfaces/IPairPoolManager.sol";
@@ -32,7 +31,7 @@ contract MarginChecker is IMarginChecker, Owned {
 
     uint24 public liquidationMarginLevel = 1100000; // 110%
     uint24 public minMarginLevel = 1170000; // 117%
-    uint256 public constant ONE_MILLION = 10 ** 6;
+    uint24 public minBorrowLevel = 1400000; // 140%
     uint24 callerProfit = 10 ** 4;
     uint24 protocolProfit = 0;
     uint24[] leverageThousandths = [380, 200, 100, 40, 9];
@@ -54,6 +53,10 @@ contract MarginChecker is IMarginChecker, Owned {
 
     function setMinMarginLevel(uint24 _minMarginLevel) external onlyOwner {
         minMarginLevel = _minMarginLevel;
+    }
+
+    function setMinBorrowLevel(uint24 _minBorrowLevel) external onlyOwner {
+        minBorrowLevel = _minBorrowLevel;
     }
 
     // ******************** EXTERNAL CALL ********************
@@ -82,8 +85,8 @@ contract MarginChecker is IMarginChecker, Owned {
         PoolStatus memory _status,
         MarginPosition memory _position,
         uint256 closeMillionth
-    ) public view returns (int256 pnlAmount) {
-        if (_position.borrowAmount == 0) {
+    ) external view returns (int256 pnlAmount) {
+        if (_position.borrowAmount == 0 || closeMillionth == 0) {
             return 0;
         }
         Currency marginCurrency = _position.marginForOne ? _status.key.currency1 : _status.key.currency0;
@@ -106,32 +109,50 @@ contract MarginChecker is IMarginChecker, Owned {
         returns (int256 pnlAmount)
     {
         IPairPoolManager pairPoolManager = IPairPoolManager(IStatusBase(address(positionManager)).pairPoolManager());
-        MarginPosition memory position = positionManager.getPosition(positionId);
-        PoolStatus memory status = pairPoolManager.getStatus(position.poolId);
-        pnlAmount = estimatePNL(pairPoolManager, status, position, closeMillionth);
+        MarginPosition memory _position = positionManager.getPosition(positionId);
+        if (_position.borrowAmount == 0 || closeMillionth == 0) {
+            pnlAmount = 0;
+        }
+        uint256 repayAmount = uint256(_position.borrowAmount).mulDivMillion(closeMillionth);
+        uint256 releaseAmount;
+        if (_position.marginTotal == 0) {
+            releaseAmount = pairPoolManager.getAmountOut(_position.poolId, _position.marginForOne, repayAmount);
+        } else {
+            releaseAmount = pairPoolManager.getAmountIn(_position.poolId, !_position.marginForOne, repayAmount);
+        }
+        uint256 releaseTotal = uint256(_position.marginTotal).mulDivMillion(closeMillionth);
+        pnlAmount = int256(releaseTotal) - int256(releaseAmount);
     }
 
-    function checkMinMarginLevel(
-        IPairMarginManager poolManager,
-        MarginParamsVo memory paramsVo,
-        PoolStatus memory _status
-    ) external view returns (bool valid) {
+    function checkMinMarginLevel(MarginParamsVo memory paramsVo, PoolStatus memory _status)
+        external
+        view
+        returns (bool valid)
+    {
         MarginParams memory params = paramsVo.params;
         (uint256 reserve0, uint256 reserve1) =
             (_status.realReserve0 + _status.mirrorReserve0, _status.realReserve1 + _status.mirrorReserve1);
         (uint256 reserveBorrow, uint256 reserveMargin) =
             params.marginForOne ? (reserve0, reserve1) : (reserve1, reserve0);
-        uint256 debtAmount;
+        uint256 repayAmount;
+        IPairPoolManager pairPoolManager = IPairPoolManager(IStatusBase(msg.sender).pairPoolManager());
+        uint256 assetsAmount = pairPoolManager.lendingPoolManager().computeRealAmount(
+            params.poolId, paramsVo.marginCurrency, params.marginAmount + paramsVo.marginTotal
+        );
         if (params.leverage > 0) {
-            debtAmount = reserveMargin * params.borrowAmount / reserveBorrow;
+            repayAmount = Math.mulDiv(reserveBorrow, assetsAmount, reserveMargin);
+            repayAmount = repayAmount.mulMillionDiv(minMarginLevel);
         } else {
-            debtAmount = poolManager.getAmountOut(params.poolId, params.marginForOne, params.borrowAmount);
+            uint256 numerator = assetsAmount * reserveBorrow;
+            uint256 denominator = reserveMargin + assetsAmount;
+            repayAmount = numerator / denominator;
+            repayAmount = repayAmount.mulMillionDiv(minBorrowLevel);
         }
-        valid = params.marginAmount + paramsVo.marginTotal >= debtAmount.mulDivMillion(minMarginLevel);
+        valid = params.borrowAmount <= repayAmount;
     }
 
     function updatePosition(IMarginPositionManager positionManager, MarginPosition memory _position)
-        public
+        external
         view
         returns (MarginPosition memory)
     {
@@ -199,10 +220,11 @@ contract MarginChecker is IMarginChecker, Owned {
     {
         IPairPoolManager poolManager = IPairPoolManager(_poolManager);
         PoolStatus memory status = poolManager.getStatus(poolId);
-        (uint256 marginReserve0, uint256 marginReserve1, uint256 incrementMaxMirror0, uint256 incrementMaxMirror1) =
-            poolManager.marginLiquidity().getMarginReserves(address(poolManager), poolId, status);
-        uint256 borrowMaxAmount = marginForOne ? incrementMaxMirror0 : incrementMaxMirror1;
+
         if (leverage > 0) {
+            (uint256 marginReserve0, uint256 marginReserve1, uint256 incrementMaxMirror0, uint256 incrementMaxMirror1) =
+                poolManager.marginLiquidity().getMarginReserves(address(poolManager), poolId, status);
+            uint256 borrowMaxAmount = marginForOne ? incrementMaxMirror0 : incrementMaxMirror1;
             uint256 marginMaxTotal = (marginForOne ? marginReserve1 : marginReserve0);
             if (marginMaxTotal > 1000 && borrowMaxAmount > 1000) {
                 borrowMaxAmount -= 1000;
@@ -220,6 +242,11 @@ contract MarginChecker is IMarginChecker, Owned {
             }
             marginMax = marginMaxTotal / leverage;
         } else {
+            (uint256 interestReserve0, uint256 interestReserve1) =
+                poolManager.marginLiquidity().getInterestReserves(address(poolManager), poolId, status);
+            uint256 borrowMaxAmount = (marginForOne ? interestReserve0 : interestReserve1);
+            uint256 flowMaxAmount = (marginForOne ? status.realReserve0 : status.realReserve1) * 20 / 100;
+            borrowMaxAmount = Math.min(borrowMaxAmount, flowMaxAmount);
             if (borrowMaxAmount > 1000) {
                 borrowAmount = borrowMaxAmount - 1000;
             } else {
@@ -243,19 +270,20 @@ contract MarginChecker is IMarginChecker, Owned {
         IPairPoolManager poolManager = IPairPoolManager(_poolManager);
         (uint256 reserveBorrow, uint256 reserveMargin) =
             getReserves(_poolManager, _position.poolId, _position.marginForOne);
-        uint256 debtAmount;
+        uint256 needAmount;
         if (_position.marginTotal > 0) {
-            debtAmount = Math.mulDiv(reserveMargin, _position.borrowAmount, reserveBorrow);
+            uint256 debtAmount = uint256(_position.borrowAmount).mulDivMillion(minMarginLevel);
+            needAmount = Math.mulDiv(reserveMargin, debtAmount, reserveBorrow);
         } else {
-            debtAmount = poolManager.getAmountOut(_position.poolId, _position.marginForOne, _position.borrowAmount);
+            uint256 debtAmount = uint256(_position.borrowAmount).mulDivMillion(minBorrowLevel);
+            (needAmount,,) = poolManager.statusManager().getAmountIn(_status, !_position.marginForOne, debtAmount);
         }
-        uint256 liquidatedAmount = debtAmount.mulDivMillion(liquidationMarginLevel);
         Currency marginCurrency = _position.marginForOne ? _status.key.currency1 : _status.key.currency0;
         uint256 assetAmount = poolManager.lendingPoolManager().computeRealAmount(
             _position.poolId, marginCurrency, _position.marginAmount + _position.marginTotal
         );
-        if (liquidatedAmount < assetAmount) {
-            maxAmount = Math.mulDiv(assetAmount - liquidatedAmount, 800, 1000);
+        if (needAmount < assetAmount) {
+            maxAmount = assetAmount - needAmount;
         }
         maxAmount = Math.min(uint256(_position.marginAmount), maxAmount);
     }
@@ -302,19 +330,31 @@ contract MarginChecker is IMarginChecker, Owned {
             + uint224(status.realReserve1 + status.mirrorReserve1);
     }
 
-    function getLiquidateStatus(address pairPoolManager, PoolId poolId, bool marginForOne)
+    function _getOracleReserves(address poolManager, PoolStatus memory _status)
+        internal
+        view
+        returns (uint224 reserves)
+    {
+        address marginOracle = IPairPoolManager(poolManager).statusManager().marginOracle();
+        if (marginOracle == address(0)) {
+            reserves = 0;
+        } else {
+            (reserves,) = IMarginOracleReader(marginOracle).observeNow(IPairPoolManager(poolManager), _status);
+        }
+    }
+
+    function getLiquidateStatus(address pairPoolManager, PoolStatus memory _status, bool marginForOne)
         external
         view
         returns (LiquidateStatus memory liquidateStatus)
     {
-        PoolStatus memory _status = IPairMarginManager(pairPoolManager).getStatus(poolId);
-        liquidateStatus.poolId = poolId;
+        liquidateStatus.poolId = _status.key.toId();
         liquidateStatus.marginForOne = marginForOne;
         (liquidateStatus.borrowCurrency, liquidateStatus.marginCurrency) = marginForOne
             ? (_status.key.currency0, _status.key.currency1)
             : (_status.key.currency1, _status.key.currency0);
         liquidateStatus.statusReserves = _getReservesX224(_status);
-        liquidateStatus.oracleReserves = getOracleReserves(pairPoolManager, poolId);
+        liquidateStatus.oracleReserves = _getOracleReserves(pairPoolManager, _status);
     }
 
     /// @inheritdoc IMarginChecker
@@ -339,25 +379,26 @@ contract MarginChecker is IMarginChecker, Owned {
         if (_position.borrowAmount > 0) {
             borrowAmount = uint256(_position.borrowAmount);
             if (_position.rateCumulativeLast > 0) {
-                uint256 rateLast = poolManager.marginFees().getBorrowRateCumulativeLast(
-                    address(poolManager), _position.poolId, _position.marginForOne
-                );
+                uint256 rateLast = _position.marginForOne ? _status.rate0CumulativeLast : _status.rate1CumulativeLast;
                 borrowAmount = _position.borrowAmount.increaseInterestCeil(_position.rateCumulativeLast, rateLast);
             }
             (uint256 reserveBorrow, uint256 reserveMargin) =
                 getReserves(address(poolManager), _position.poolId, _position.marginForOne);
-            uint256 debtAmount;
-            if (_position.marginTotal > 0) {
-                debtAmount = Math.mulDiv(reserveMargin, _position.borrowAmount, reserveBorrow);
-            } else {
-                debtAmount = poolManager.getAmountOut(_position.poolId, _position.marginForOne, _position.borrowAmount);
-            }
-            uint256 liquidatedAmount = debtAmount.mulDivMillion(liquidationMarginLevel);
             Currency marginCurrency = _position.marginForOne ? _status.key.currency1 : _status.key.currency0;
             uint256 assetAmount = poolManager.lendingPoolManager().computeRealAmount(
                 _position.poolId, marginCurrency, _position.marginAmount + _position.marginTotal
             );
-            liquidated = assetAmount < liquidatedAmount;
+            uint256 repayAmount;
+            if (_position.marginTotal > 0) {
+                repayAmount = Math.mulDiv(reserveBorrow, assetAmount, reserveMargin);
+            } else {
+                uint256 numerator = assetAmount * reserveBorrow;
+                uint256 denominator = reserveMargin + assetAmount;
+                repayAmount = numerator / denominator;
+            }
+            uint256 liquidatedAmount = repayAmount.mulMillionDiv(liquidationMarginLevel);
+            // debt exceeds assets
+            liquidated = _position.borrowAmount > liquidatedAmount;
         }
     }
 
@@ -372,47 +413,6 @@ contract MarginChecker is IMarginChecker, Owned {
         for (uint256 i = 0; i < positionIds.length; i++) {
             uint256 positionId = positionIds[i];
             (liquidatedList[i], borrowAmountList[i]) = checkLiquidate(manager, positionId);
-        }
-    }
-
-    /// @inheritdoc IMarginChecker
-    function checkLiquidate(
-        IPairMarginManager poolManager,
-        LiquidateStatus memory _liqStatus,
-        MarginPosition[] memory inPositions
-    ) external view returns (bool[] memory liquidatedList, uint256[] memory borrowAmountList) {
-        (uint256 reserveBorrow, uint256 reserveMargin) =
-            getReserves(address(poolManager), _liqStatus.poolId, _liqStatus.marginForOne);
-        uint256 rateLast = poolManager.marginFees().getBorrowRateCumulativeLast(
-            address(poolManager), _liqStatus.poolId, _liqStatus.marginForOne
-        );
-        bytes32 bytes32PoolId = PoolId.unwrap(_liqStatus.poolId);
-        liquidatedList = new bool[](inPositions.length);
-        borrowAmountList = new uint256[](inPositions.length);
-        for (uint256 i = 0; i < inPositions.length; i++) {
-            MarginPosition memory _position = inPositions[i];
-            if (PoolId.unwrap(_position.poolId) == bytes32PoolId && _position.marginForOne == _liqStatus.marginForOne) {
-                if (_position.borrowAmount > 0) {
-                    uint256 borrowAmount = _position.borrowAmount;
-                    uint256 assetAmount = poolManager.lendingPoolManager().computeRealAmount(
-                        _position.poolId, _liqStatus.marginCurrency, _position.marginAmount + _position.marginTotal
-                    );
-                    if (_position.rateCumulativeLast > 0) {
-                        borrowAmount =
-                            _position.borrowAmount.increaseInterestCeil(_position.rateCumulativeLast, rateLast);
-                    }
-                    uint256 debtAmount;
-                    if (_position.marginTotal > 0) {
-                        debtAmount = Math.mulDiv(reserveMargin, _position.borrowAmount, reserveBorrow);
-                    } else {
-                        debtAmount =
-                            poolManager.getAmountOut(_position.poolId, _position.marginForOne, _position.borrowAmount);
-                    }
-                    uint256 liquidatedAmount = debtAmount.mulDivMillion(liquidationMarginLevel);
-                    liquidatedList[i] = assetAmount < liquidatedAmount;
-                    borrowAmountList[i] = borrowAmount;
-                }
-            }
         }
     }
 }

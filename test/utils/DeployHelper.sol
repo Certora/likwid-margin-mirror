@@ -50,7 +50,9 @@ contract DeployHelper is Test {
 
     PairPoolManager pairPoolManager;
 
-    PoolKey key;
+    error MessageError();
+
+    PoolKey tokensKey;
     PoolKey usdtKey;
     PoolKey nativeKey;
 
@@ -116,7 +118,7 @@ contract DeployHelper is Test {
         tokenA.approve(address(pairPoolManager), type(uint256).max);
         tokenB.approve(address(pairPoolManager), type(uint256).max);
         tokenUSDT.approve(address(pairPoolManager), type(uint256).max);
-        key = PoolKey({currency0: currency0, currency1: currency1, fee: 3000, tickSpacing: 1, hooks: hookManager});
+        tokensKey = PoolKey({currency0: currency0, currency1: currency1, fee: 3000, tickSpacing: 1, hooks: hookManager});
         nativeKey = PoolKey({
             currency0: CurrencyLibrary.ADDRESS_ZERO,
             currency1: currencyB,
@@ -133,7 +135,7 @@ contract DeployHelper is Test {
             hooks: hookManager
         });
 
-        manager.initialize(key, SQRT_RATIO_1_1);
+        manager.initialize(tokensKey, SQRT_RATIO_1_1);
         manager.initialize(nativeKey, SQRT_RATIO_1_1);
         manager.initialize(usdtKey, SQRT_RATIO_1_1);
 
@@ -160,9 +162,45 @@ contract DeployHelper is Test {
         deployMintAndApprove2Currencies();
     }
 
+    function initNativeKey() internal {
+        AddLiquidityParams memory params = AddLiquidityParams({
+            poolId: nativeKey.toId(),
+            level: 4,
+            amount0: 1 ether,
+            amount1: 10 ether,
+            to: address(this),
+            deadline: type(uint256).max
+        });
+        pairPoolManager.addLiquidity{value: 1 ether}(params);
+    }
+
+    function initTokensKey() internal {
+        AddLiquidityParams memory params = AddLiquidityParams({
+            poolId: tokensKey.toId(),
+            level: 4,
+            amount0: 10 ether,
+            amount1: 10 ether,
+            to: address(this),
+            deadline: type(uint256).max
+        });
+        pairPoolManager.addLiquidity{value: 1 ether}(params);
+    }
+
+    function initUSDTKey() internal {
+        AddLiquidityParams memory params = AddLiquidityParams({
+            poolId: usdtKey.toId(),
+            level: 4,
+            amount0: 1 ether,
+            amount1: 100 ether,
+            to: address(this),
+            deadline: type(uint256).max
+        });
+        pairPoolManager.addLiquidity{value: 1 ether}(params);
+    }
+
     function initPoolLiquidity() internal {
         AddLiquidityParams memory params = AddLiquidityParams({
-            poolId: key.toId(),
+            poolId: tokensKey.toId(),
             level: 4,
             amount0: 1e18,
             amount1: 1e18,
@@ -188,6 +226,32 @@ contract DeployHelper is Test {
             deadline: type(uint256).max
         });
         pairPoolManager.addLiquidity{value: 1 ether}(params);
+    }
+
+    function printPoolStatus(PoolStatus memory status) internal pure {
+        console.logBytes32(PoolId.unwrap(status.key.toId()));
+        console.log("status.realReserve0:", status.realReserve0);
+        console.log("status.realReserve1:", status.realReserve1);
+        console.log("status.mirrorReserve0:", status.mirrorReserve0);
+        console.log("status.mirrorReserve1:", status.mirrorReserve1);
+        console.log("status.lendingRealReserve0:", status.lendingRealReserve0);
+        console.log("status.lendingRealReserve1:", status.lendingRealReserve1);
+        console.log("status.lendingMirrorReserve0:", status.lendingMirrorReserve0);
+        console.log("status.lendingMirrorReserve1:", status.lendingMirrorReserve1);
+    }
+
+    function nativeKeyBalance(string memory message) internal view {
+        uint256 balanceBefore0 = manager.balanceOf(address(pairPoolManager), nativeKey.currency0.toId());
+        uint256 balanceBefore1 = manager.balanceOf(address(pairPoolManager), nativeKey.currency1.toId());
+        uint256 fees0 = poolStatusManager.protocolFeesAccrued(nativeKey.currency0);
+        uint256 fees1 = poolStatusManager.protocolFeesAccrued(nativeKey.currency1);
+        PoolStatus memory status = pairPoolManager.getStatus(nativeKey.toId());
+        uint256 realReserveBefore0 = status.realReserve0;
+        uint256 realReserveBefore1 = status.realReserve1;
+        assertEq(balanceBefore0, realReserveBefore0 + fees0, string.concat(message, " currency0 is not balance"));
+        assertEq(balanceBefore1, realReserveBefore1 + fees1, string.concat(message, " currency1 is not balance"));
+        assertGt(balanceBefore0, 0);
+        assertGt(balanceBefore1, 0);
     }
 
     receive() external payable {}

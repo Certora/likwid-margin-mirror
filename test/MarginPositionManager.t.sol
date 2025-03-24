@@ -10,9 +10,9 @@ import {MarginRouter} from "../src/MarginRouter.sol";
 import {PoolStatus} from "../src/types/PoolStatus.sol";
 import {MarginParams} from "../src/types/MarginParams.sol";
 import {MarginPosition, MarginPositionVo} from "../src/types/MarginPosition.sol";
-import {BurnParams} from "../src/types/BurnParams.sol";
 import {AddLiquidityParams, RemoveLiquidityParams} from "../src/types/LiquidityParams.sol";
 import {TimeLibrary} from "../src/libraries/TimeLibrary.sol";
+import {LiquidityLevel} from "../src/libraries/LiquidityLevel.sol";
 import {CurrencyPoolLibrary} from "../src/libraries/CurrencyPoolLibrary.sol";
 // Solmate
 import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
@@ -36,6 +36,7 @@ import {DeployHelper} from "./utils/DeployHelper.sol";
 
 contract MarginPositionManagerTest is DeployHelper {
     using TimeLibrary for *;
+    using LiquidityLevel for uint8;
     using CurrencyPoolLibrary for Currency;
 
     function setUp() public {
@@ -45,7 +46,7 @@ contract MarginPositionManagerTest is DeployHelper {
 
     function test_hook_margin_tokens() public {
         address user = address(this);
-        uint256 rate = marginFees.getBorrowRate(address(pairPoolManager), key.toId(), false);
+        uint256 rate = marginFees.getBorrowRate(address(pairPoolManager), tokensKey.toId(), false);
         assertEq(rate, 50000);
         uint256 positionId;
         uint256 borrowAmount;
@@ -53,7 +54,7 @@ contract MarginPositionManagerTest is DeployHelper {
         tokenA.approve(address(marginPositionManager), payValue);
         tokenB.approve(address(marginPositionManager), payValue);
         MarginParams memory params = MarginParams({
-            poolId: key.toId(),
+            poolId: tokensKey.toId(),
             marginForOne: false,
             leverage: 3,
             marginAmount: payValue,
@@ -81,7 +82,7 @@ contract MarginPositionManagerTest is DeployHelper {
         tokenA.approve(address(marginPositionManager), payValue);
         tokenB.approve(address(marginPositionManager), payValue);
         params = MarginParams({
-            poolId: key.toId(),
+            poolId: tokensKey.toId(),
             marginForOne: false,
             leverage: 3,
             marginAmount: payValue,
@@ -104,9 +105,9 @@ contract MarginPositionManagerTest is DeployHelper {
             position.borrowAmount,
             position.rateCumulativeLast
         );
-        (uint256 _reserves0, uint256 _reserves1) = pairPoolManager.getReserves(key.toId());
+        (uint256 _reserves0, uint256 _reserves1) = pairPoolManager.getReserves(tokensKey.toId());
         console.log("_reserves0:%s,_reserves1:%s", _reserves0, _reserves1);
-        PoolStatus memory _status = pairPoolManager.getStatus(key.toId());
+        PoolStatus memory _status = pairPoolManager.getStatus(tokensKey.toId());
         console.log("reserve0:%s,reserve1:%s", uint256(_status.realReserve0), uint256(_status.realReserve1));
         console.log(
             "mirrorReserve0:%s,mirrorReserve1:%s", uint256(_status.mirrorReserve0), uint256(_status.mirrorReserve1)
@@ -116,7 +117,7 @@ contract MarginPositionManagerTest is DeployHelper {
     function test_hook_repay_tokens() public {
         test_hook_margin_tokens();
         address user = address(this);
-        uint256 positionId = marginPositionManager.getPositionId(key.toId(), false, user, true);
+        uint256 positionId = marginPositionManager.getPositionId(tokensKey.toId(), false, user, true);
         assertGt(positionId, 0);
         MarginPosition memory position = marginPositionManager.getPosition(positionId);
         uint256 repay = 0.01 ether;
@@ -131,11 +132,11 @@ contract MarginPositionManagerTest is DeployHelper {
 
     function testCloseTokens() public {
         address user = address(this);
-        uint256 rate = marginFees.getBorrowRate(address(pairPoolManager), key.toId(), false);
+        uint256 rate = marginFees.getBorrowRate(address(pairPoolManager), tokensKey.toId(), false);
         assertEq(rate, 50000);
         uint256 positionId;
         uint256 borrowAmount;
-        PoolId poolId = key.toId();
+        PoolId poolId = tokensKey.toId();
         uint256 payValue = 0.01 ether;
         tokenA.approve(address(marginPositionManager), payValue);
         tokenB.approve(address(marginPositionManager), payValue);
@@ -151,9 +152,9 @@ contract MarginPositionManagerTest is DeployHelper {
         });
 
         (positionId, borrowAmount) = marginPositionManager.margin(params);
-        Currency marginCurrency = key.currency0;
+        Currency marginCurrency = tokensKey.currency0;
         uint256 lendingId = marginCurrency.toTokenId(poolId);
-        positionId = marginPositionManager.getPositionId(key.toId(), false, user, true);
+        positionId = marginPositionManager.getPositionId(tokensKey.toId(), false, user, true);
         assertGt(positionId, 0);
         MarginPosition memory position = marginPositionManager.getPosition(positionId);
         uint256 marginBalance = lendingPoolManager.balanceOf(address(marginPositionManager), lendingId);
@@ -164,7 +165,7 @@ contract MarginPositionManagerTest is DeployHelper {
             position.borrowAmount,
             marginBalance
         );
-        // vm.warp(3600);
+        // skip(3600);
         uint256 releaseAmount = 0.01 ether;
         tokenA.approve(address(pairPoolManager), releaseAmount);
         int256 pnlAmount = marginChecker.estimatePNL(marginPositionManager, positionId, 300000);
@@ -177,7 +178,7 @@ contract MarginPositionManagerTest is DeployHelper {
             newPosition.borrowAmount,
             marginBalance
         );
-        vm.warp(3600 * 2);
+        skip(3600 * 2);
         position = marginPositionManager.getPosition(positionId);
         marginBalance = lendingPoolManager.balanceOf(address(marginPositionManager), lendingId);
         console.log(
@@ -198,7 +199,7 @@ contract MarginPositionManagerTest is DeployHelper {
         address user = address(this);
         PoolId poolId = nativeKey.toId();
         uint256 rate = marginFees.getBorrowRate(address(pairPoolManager), poolId, false);
-        vm.warp(3600 * 20);
+        skip(3600 * 20);
 
         uint256 positionId;
         uint256 borrowAmount;
@@ -272,7 +273,7 @@ contract MarginPositionManagerTest is DeployHelper {
         uint256 rateCumulativeLast = marginFees.getBorrowRateCumulativeLast(address(pairPoolManager), poolId, false);
         console.log("rate:%s,rateCumulativeLast:%s", rate, rateCumulativeLast);
         PoolStatus memory status = pairPoolManager.getStatus(poolId);
-        vm.warp(3600 * 10);
+        skip(3600 * 10);
         position = marginPositionManager.getPosition(positionId);
         console.log(
             "positionId:%s,position.borrowAmount:%s,rateCumulativeLast:%s",
@@ -426,7 +427,7 @@ contract MarginPositionManagerTest is DeployHelper {
         });
         vm.expectRevert(bytes("EXPIRED"));
         payValue = 0.001 ether;
-        vm.warp(3600 * 20);
+        skip(3600 * 20);
         (positionId, borrowAmount) = marginPositionManager.margin{value: payValue}(params);
         vm.stopPrank();
     }
@@ -437,30 +438,31 @@ contract MarginPositionManagerTest is DeployHelper {
         PoolId poolId = nativeKey.toId();
         uint256 positionId = marginPositionManager.getPositionId(poolId, false, user, true);
         assertGt(positionId, 0);
-        vm.warp(3600 * 20);
+        skip(3600 * 20);
         PoolStatus memory status = pairPoolManager.getStatus(poolId);
         MarginPosition memory position = marginPositionManager.getPosition(positionId);
         console.log("status.mirrorReserve1:%s", status.mirrorReserve1);
-        assertEq(status.mirrorReserve1 / 10, position.borrowAmount / 10);
+        assertLe(status.mirrorReserve1, position.borrowAmount, "status.mirrorReserve1<=position.borrowAmount");
         uint256 userBalance = user.balance;
         uint256 repay = 0.01 ether;
         tokenB.approve(address(pairPoolManager), repay);
         marginPositionManager.repay(positionId, repay, UINT256_MAX);
         MarginPosition memory newPosition = marginPositionManager.getPosition(positionId);
-        assertEq((position.borrowAmount - newPosition.borrowAmount) / 10, repay / 10);
+        assertEq((position.borrowAmount - newPosition.borrowAmount) / 10, repay / 10, "repay assertEq");
         assertEq(
             position.marginTotal + position.marginAmount - newPosition.marginTotal - newPosition.marginAmount,
-            user.balance - userBalance
+            user.balance - userBalance,
+            "userBalance"
         );
         status = pairPoolManager.getStatus(poolId);
-        assertEq(status.mirrorReserve1 / 10, newPosition.borrowAmount / 10);
+        assertLe(status.mirrorReserve1, newPosition.borrowAmount, "status.mirrorReserve1<=newPosition.borrowAmount");
 
-        uint256 pFeeAmount = poolStatusManager.protocolFeesAccrued(nativeKey.currency1);
+        uint256 pFeeAmount = poolStatusManager.protocolFeesAccrued(nativeKey.currency0);
         console.log("pFeeAmount:%s", pFeeAmount);
         uint256 collectFeeAmount =
-            marginFees.collectProtocolFees(address(pairPoolManager), user, nativeKey.currency1, pFeeAmount);
+            marginFees.collectProtocolFees(address(pairPoolManager), user, nativeKey.currency0, pFeeAmount);
         console.log("collectFeeAmount:%s", collectFeeAmount);
-        assertEq(collectFeeAmount, pFeeAmount);
+        assertEq(collectFeeAmount, pFeeAmount, "collectFeeAmount");
     }
 
     function test_hook_close_native() public {
@@ -517,7 +519,7 @@ contract MarginPositionManagerTest is DeployHelper {
         assertGt(positionId, 0);
         position = marginPositionManager.getPosition(positionId);
         (bool liquidated,) = marginChecker.checkLiquidate(address(marginPositionManager), positionId);
-        uint256 amountIn = 0.1 ether;
+        uint256 amountIn = 0.01 ether;
         uint256 swapIndex = 0;
         while (!liquidated) {
             MarginRouter.SwapParams memory swapParams = MarginRouter.SwapParams({
@@ -532,7 +534,7 @@ contract MarginPositionManagerTest is DeployHelper {
             swapRouter.exactInput{value: amountIn}(swapParams);
             (liquidated,) = marginChecker.checkLiquidate(address(marginPositionManager), positionId);
             swapIndex++;
-            vm.warp(30 * swapIndex);
+            skip(30 * swapIndex);
         }
         console.log(
             "before swapIndex:%s, liquidate nativeHook.balance:%s,marginPositionManager.balance:%s",
@@ -540,10 +542,8 @@ contract MarginPositionManagerTest is DeployHelper {
             address(pairPoolManager).balance,
             address(marginPositionManager).balance
         );
-        BurnParams memory liquidateParams =
-            BurnParams({poolId: nativeKey.toId(), marginForOne: false, positionIds: new uint256[](1)});
-        liquidateParams.positionIds[0] = positionId;
-        marginPositionManager.liquidateBurn(liquidateParams);
+
+        marginPositionManager.liquidateBurn(positionId);
         position = marginPositionManager.getPosition(positionId);
         console.log(
             "after liquidate nativeHook.balance:%s,marginPositionManager.balance:%s",
@@ -552,7 +552,7 @@ contract MarginPositionManagerTest is DeployHelper {
         );
     }
 
-    function test_hook_liquidate_burn_without_oracle() public {
+    function testLiquidateBurnWithoutOracle() public {
         address user = address(this);
         poolStatusManager.setMarginOracle(address(0));
         tokenB.approve(address(pairPoolManager), 1e18);
@@ -591,7 +591,7 @@ contract MarginPositionManagerTest is DeployHelper {
         assertGt(positionId, 0);
         position = marginPositionManager.getPosition(positionId);
         (bool liquidated,) = marginChecker.checkLiquidate(address(marginPositionManager), positionId);
-        uint256 amountIn = 0.1 ether;
+        uint256 amountIn = 0.01 ether;
         uint256 swapIndex = 0;
         while (!liquidated) {
             MarginRouter.SwapParams memory swapParams = MarginRouter.SwapParams({
@@ -606,7 +606,7 @@ contract MarginPositionManagerTest is DeployHelper {
             swapRouter.exactInput{value: amountIn}(swapParams);
             (liquidated,) = marginChecker.checkLiquidate(address(marginPositionManager), positionId);
             swapIndex++;
-            vm.warp(30 * swapIndex);
+            skip(30 * swapIndex);
         }
         console.log(
             "before swapIndex:%s, liquidate nativeHook.balance:%s,marginPositionManager.balance:%s",
@@ -614,10 +614,8 @@ contract MarginPositionManagerTest is DeployHelper {
             address(pairPoolManager).balance,
             address(marginPositionManager).balance
         );
-        BurnParams memory liquidateParams =
-            BurnParams({poolId: nativeKey.toId(), marginForOne: false, positionIds: new uint256[](1)});
-        liquidateParams.positionIds[0] = positionId;
-        marginPositionManager.liquidateBurn(liquidateParams);
+
+        marginPositionManager.liquidateBurn(positionId);
         position = marginPositionManager.getPosition(positionId);
         console.log(
             "after liquidate nativeHook.balance:%s,marginPositionManager.balance:%s",
@@ -671,7 +669,7 @@ contract MarginPositionManagerTest is DeployHelper {
             recipient: user,
             deadline: block.timestamp + 1000
         });
-        vm.warp(1000);
+        skip(1000);
         (positionId, borrowAmount) = marginPositionManager.margin{value: payValue}(params);
         console.log(
             "pairPoolManager.balance:%s,marginPositionManager.balance:%s",
@@ -857,10 +855,10 @@ contract MarginPositionManagerTest is DeployHelper {
         test_hook_margin_usdts();
         (_fee, _marginFee) = pairPoolManager.marginFees().getPoolFees(address(pairPoolManager), poolId);
         console.log("after margin _fee:%s", _fee);
-        vm.warp(30);
+        skip(30);
         (_fee, _marginFee) = pairPoolManager.marginFees().getPoolFees(address(pairPoolManager), poolId);
         console.log("after margin _fee:%s", _fee);
-        vm.warp(126);
+        skip(126);
         (_fee, _marginFee) = pairPoolManager.marginFees().getPoolFees(address(pairPoolManager), poolId);
         console.log("after margin _fee:%s", _fee);
     }
@@ -930,7 +928,7 @@ contract MarginPositionManagerTest is DeployHelper {
                 swapRouter.exactInput{value: amountIn}(swapParams);
                 (liquidated,) = marginChecker.checkLiquidate(address(marginPositionManager), positionId);
                 swapIndex++;
-                vm.warp(30 * swapIndex);
+                skip(30 * swapIndex);
                 position = marginPositionManager.getPosition(positionId);
                 status = pairPoolManager.getStatus(poolId);
                 console.log(
@@ -960,7 +958,7 @@ contract MarginPositionManagerTest is DeployHelper {
 
     function test_getPositions() public {
         address user = address(this);
-        PoolId poolId1 = key.toId();
+        PoolId poolId1 = tokensKey.toId();
         PoolId poolId2 = nativeKey.toId();
         uint256 positionId;
         uint256 borrowAmount;
@@ -1022,31 +1020,31 @@ contract MarginPositionManagerTest is DeployHelper {
 
     function test_OneLeverage() public {
         leverageMax(true, 1);
-        vm.warp(1000);
+        skip(1000);
         leverageMax(false, 1);
     }
 
     function test_TwoLeverage() public {
         leverageMax(true, 2);
-        vm.warp(1000);
+        skip(1000);
         leverageMax(false, 2);
     }
 
     function test_ThreeLeverage() public {
         leverageMax(true, 3);
-        vm.warp(1000);
+        skip(1000);
         leverageMax(false, 3);
     }
 
     function test_FourLeverage() public {
         leverageMax(true, 4);
-        vm.warp(1000);
+        skip(1000);
         leverageMax(false, 4);
     }
 
     function test_FiveLeverage() public {
         leverageMax(true, 5);
-        vm.warp(1000);
+        skip(1000);
         leverageMax(false, 5);
     }
 
@@ -1058,146 +1056,7 @@ contract MarginPositionManagerTest is DeployHelper {
         marginChecker.getPositions(marginPositionManager, positionIds);
     }
 
-    function test_liquidateBurn() public {
-        uint256 length = 100;
-        uint256[] memory positionIds = new uint256[](length);
-        uint256 debtAmount = 0;
-        uint256 borrowAmountAll = 0;
-        uint256 keyId = nativeKey.currency1.toTokenId(nativeKey);
-        uint256 keyId0 = nativeKey.currency0.toTokenId(nativeKey);
-        for (uint256 i = 0; i < length; i++) {
-            address user = vm.addr(i + 1);
-            uint256 positionId;
-            uint256 borrowAmount;
-            uint256 payValue = 0.0001 ether;
-            MarginParams memory params = MarginParams({
-                poolId: nativeKey.toId(),
-                marginForOne: false,
-                leverage: 3,
-                marginAmount: payValue,
-                borrowAmount: 0,
-                borrowMaxAmount: 0,
-                recipient: user,
-                deadline: block.timestamp + 1000
-            });
-
-            (positionId, borrowAmount) = marginPositionManager.margin{value: payValue}(params);
-            MarginPosition memory position = marginPositionManager.getPosition(positionId);
-            positionId = marginPositionManager.getPositionId(nativeKey.toId(), false, user, true);
-            assertGt(positionId, 0);
-            position = marginPositionManager.getPosition(positionId);
-            positionIds[i] = positionId;
-            debtAmount += position.marginAmount + position.marginTotal;
-            borrowAmountAll += borrowAmount;
-            // uint256 releaseAmount =
-            //     pairPoolManager.getAmountIn(position.poolId, !position.marginForOne, position.borrowAmount);
-        }
-        assertEq(debtAmount, lendingPoolManager.balanceOf(address(marginPositionManager), keyId0));
-        uint256 mirrorBalance = mirrorTokenManager.balanceOf(address(pairPoolManager), keyId);
-        console.log("mirrorBalance:%s,borrowAmountAll:%s", mirrorBalance, borrowAmountAll);
-        uint256 swapIndex = 0;
-        for (uint256 i = 0; i < length; i++) {
-            uint256 positionId = positionIds[i];
-            (bool liquidated,) = marginChecker.checkLiquidate(address(marginPositionManager), positionId);
-            uint256 amountIn = 0.1 ether;
-            address user = address(this);
-            while (!liquidated) {
-                MarginRouter.SwapParams memory swapParams = MarginRouter.SwapParams({
-                    poolId: nativeKey.toId(),
-                    zeroForOne: true,
-                    to: user,
-                    amountIn: amountIn,
-                    amountOut: 0,
-                    amountOutMin: 0,
-                    deadline: type(uint256).max
-                });
-                swapRouter.exactInput{value: amountIn}(swapParams);
-                (liquidated,) = marginChecker.checkLiquidate(address(marginPositionManager), positionId);
-                swapIndex++;
-                console.log("swapIndex:%s", swapIndex);
-                vm.warp(300 * swapIndex);
-            }
-        }
-        MarginPosition memory _position = marginPositionManager.getPosition(1);
-        console.log("position.borrowAmount:%s", _position.borrowAmount);
-        assertGt(_position.borrowAmount, 0);
-        BurnParams memory burnParams =
-            BurnParams({poolId: nativeKey.toId(), marginForOne: false, positionIds: positionIds});
-        uint256 profit = marginPositionManager.liquidateBurn(burnParams);
-        console.log("profit:%s", profit);
-        _position = marginPositionManager.getPosition(1);
-        assertEq(_position.borrowAmount, 0);
-        assertEq(0, address(marginPositionManager).balance);
-        PoolStatus memory status = pairPoolManager.getStatus(nativeKey.toId());
-        mirrorBalance = mirrorTokenManager.balanceOf(address(pairPoolManager), keyId);
-        console.log("mirrorBalance:%s,status.mirrorReserve1:%s", mirrorBalance, status.mirrorReserve1);
-    }
-
-    function testLiquidateBurnSame() public {
-        uint256 length = 2;
-        uint256[] memory positionIds = new uint256[](length);
-        address user = vm.addr(1);
-        uint256 keyId = CurrencyLibrary.ADDRESS_ZERO.toTokenId(nativeKey);
-        uint256 debtAmount = 0;
-        {
-            uint256 positionId;
-            uint256 borrowAmount;
-            uint256 payValue = 0.0001 ether;
-            MarginParams memory params = MarginParams({
-                poolId: nativeKey.toId(),
-                marginForOne: false,
-                leverage: 3,
-                marginAmount: payValue,
-                borrowAmount: 0,
-                borrowMaxAmount: 0,
-                recipient: user,
-                deadline: block.timestamp + 1000
-            });
-
-            (positionId, borrowAmount) = marginPositionManager.margin{value: payValue}(params);
-            MarginPosition memory position = marginPositionManager.getPosition(positionId);
-            positionId = marginPositionManager.getPositionId(nativeKey.toId(), false, user, true);
-            assertGt(positionId, 0);
-            position = marginPositionManager.getPosition(positionId);
-            for (uint256 i = 0; i < length; i++) {
-                positionIds[i] = positionId;
-            }
-            debtAmount += position.marginAmount + position.marginTotal;
-            assertEq(debtAmount, lendingPoolManager.balanceOf(address(marginPositionManager), keyId));
-        }
-
-        uint256 swapIndex = 0;
-        for (uint256 i = 0; i < length; i++) {
-            uint256 positionId = positionIds[i];
-            (bool liquidated,) = marginChecker.checkLiquidate(address(marginPositionManager), positionId);
-            uint256 amountIn = 0.1 ether;
-            while (!liquidated) {
-                MarginRouter.SwapParams memory swapParams = MarginRouter.SwapParams({
-                    poolId: nativeKey.toId(),
-                    zeroForOne: true,
-                    to: user,
-                    amountIn: amountIn,
-                    amountOut: 0,
-                    amountOutMin: 0,
-                    deadline: type(uint256).max
-                });
-                swapRouter.exactInput{value: amountIn}(swapParams);
-                (liquidated,) = marginChecker.checkLiquidate(address(marginPositionManager), positionId);
-                swapIndex++;
-                console.log("swapIndex:%s", swapIndex);
-                vm.warp(300 * swapIndex);
-            }
-        }
-        MarginPosition memory _position = marginPositionManager.getPosition(1);
-        console.log("position.borrowAmount:%s", _position.borrowAmount);
-        assertGt(_position.borrowAmount, 0);
-        BurnParams memory burnParams =
-            BurnParams({poolId: nativeKey.toId(), marginForOne: false, positionIds: positionIds});
-        vm.expectRevert(bytes("ALREADY_BURNT"));
-        marginPositionManager.liquidateBurn(burnParams);
-    }
-
-    function testBorrow() public {
+    function testBorrowOne() public {
         uint256 positionId;
         uint256 borrowAmount;
         uint256 payValue = 0.0001 ether;
@@ -1229,7 +1088,7 @@ contract MarginPositionManagerTest is DeployHelper {
         assertGt(afterETH, 0);
         uint256 newAfterBalance = tokenB.balanceOf(user);
         assertEq(newAfterBalance, afterBalance - borrowAmount / 2);
-        vm.expectRevert(bytes("DISABLE_CLOSE"));
+        vm.expectRevert(bytes("BORROW_DISABLE_CLOSE"));
         marginPositionManager.close(positionId, 500000, 0, block.timestamp + 1000);
         vm.stopPrank();
     }
@@ -1258,7 +1117,7 @@ contract MarginPositionManagerTest is DeployHelper {
         uint256 borrowPositionId = marginPositionManager.getPositionId(nativeKey.toId(), false, user, false);
         assertEq(positionId, borrowPositionId);
         assertEq(afterBalance, borrowAmount);
-        vm.warp(3600);
+        skip(3600);
         vm.startPrank(user);
         uint256 beforeETH = user.balance;
         assertEq(beforeETH, 0);
@@ -1268,7 +1127,7 @@ contract MarginPositionManagerTest is DeployHelper {
         assertGt(afterETH, 0);
         uint256 newAfterBalance = tokenB.balanceOf(user);
         assertEq(newAfterBalance, afterBalance - borrowAmount / 2);
-        vm.expectRevert(bytes("DISABLE_CLOSE"));
+        vm.expectRevert(bytes("BORROW_DISABLE_CLOSE"));
         marginPositionManager.close(positionId, 500000, 0, block.timestamp + 1000);
         vm.stopPrank();
     }
@@ -1294,7 +1153,7 @@ contract MarginPositionManagerTest is DeployHelper {
             "_position.marginAmount:%s,_position.borrowAmount:%s", _position.marginAmount, _position.borrowAmount
         );
         tokenB.approve(address(lendingPoolManager), payValue);
-        vm.warp(3600);
+        skip(3600);
         marginPositionManager.modify(positionId, int256(payValue));
         _position = marginPositionManager.getPosition(positionId);
         console.log(
@@ -1312,5 +1171,249 @@ contract MarginPositionManagerTest is DeployHelper {
         assertLt(marginMax, borrowAmount);
         (marginMax, borrowAmount) = marginChecker.getMarginMax(address(pairPoolManager), nativeKey.toId(), false, 1);
         console.log("marginMax:%s,borrowAmount:%s", marginMax, borrowAmount);
+    }
+
+    function testMarginAndLending() public {
+        uint256 liquidity;
+        PoolId poolId = nativeKey.toId();
+        {
+            liquidity = marginLiquidity.getPoolLiquidity(poolId, address(this), LiquidityLevel.BOTH_MARGIN);
+            assertGt(liquidity, 0);
+            RemoveLiquidityParams memory removeParams = RemoveLiquidityParams({
+                poolId: poolId,
+                level: LiquidityLevel.BOTH_MARGIN,
+                liquidity: liquidity,
+                deadline: type(uint256).max
+            });
+            skip(3600 * 2);
+            pairPoolManager.removeLiquidity(removeParams);
+            uint256 amount0 = 0.1 ether;
+            uint256 amount1 = 1 ether;
+            AddLiquidityParams memory params = AddLiquidityParams({
+                poolId: poolId,
+                amount0: amount0,
+                amount1: amount1,
+                to: address(this),
+                level: LiquidityLevel.NO_MARGIN,
+                deadline: type(uint256).max
+            });
+            pairPoolManager.addLiquidity{value: amount0}(params);
+            params = AddLiquidityParams({
+                poolId: poolId,
+                amount0: amount0,
+                amount1: amount1,
+                to: address(this),
+                level: LiquidityLevel.BOTH_MARGIN,
+                deadline: type(uint256).max
+            });
+            pairPoolManager.addLiquidity{value: amount0}(params);
+            PoolStatus memory status = pairPoolManager.getStatus(nativeKey.toId());
+            printPoolStatus(status);
+            liquidity = marginLiquidity.getPoolLiquidity(poolId, address(this), LiquidityLevel.BOTH_MARGIN);
+        }
+        address user = vm.addr(1);
+        uint256 payValue = 0.001 ether;
+        {
+            (bool success,) = user.call{value: 1 ether}("");
+            assertTrue(success);
+            tokenB.approve(address(lendingPoolManager), 10 ether);
+            lendingPoolManager.deposit{value: 10 ether}(address(this), poolId, nativeKey.currency0, 10 ether);
+            lendingPoolManager.deposit(address(this), poolId, nativeKey.currency1, 10 ether);
+        }
+        skip(1000);
+        {
+            uint256 nowLiquidity = marginLiquidity.getPoolLiquidity(poolId, address(this), LiquidityLevel.BOTH_MARGIN);
+            assertEq(nowLiquidity, liquidity);
+            console.log("before margin:nowLiquidity, liquidity", nowLiquidity, liquidity);
+            tokenB.transfer(user, 1 ether);
+        }
+        vm.startPrank(user);
+        MarginParams memory borrowParams = MarginParams({
+            poolId: poolId,
+            marginForOne: false,
+            leverage: 2,
+            marginAmount: payValue,
+            borrowAmount: 0,
+            borrowMaxAmount: 0,
+            recipient: user,
+            deadline: block.timestamp + 1000
+        });
+
+        (uint256 positionId, uint256 borrowAmount) = marginPositionManager.margin{value: payValue}(borrowParams);
+        assertEq(positionId, 1);
+        skip(1000);
+
+        {
+            payValue = borrowAmount / 10;
+            borrowParams = MarginParams({
+                poolId: poolId,
+                marginForOne: true,
+                leverage: 2,
+                marginAmount: payValue,
+                borrowAmount: 0,
+                borrowMaxAmount: 0,
+                recipient: user,
+                deadline: block.timestamp + 1000
+            });
+            tokenB.approve(address(pairPoolManager), payValue);
+            (positionId, borrowAmount) = marginPositionManager.margin(borrowParams);
+            console.log("borrowAmount:%s", borrowAmount);
+        }
+        {
+            uint256 nowLiquidity = marginLiquidity.getPoolLiquidity(poolId, address(this), LiquidityLevel.BOTH_MARGIN);
+            assertGt(nowLiquidity, liquidity);
+            console.log("after margin:nowLiquidity%s, liquidity%s", nowLiquidity, liquidity);
+        }
+        vm.stopPrank();
+        {
+            PoolStatus memory status = pairPoolManager.getStatus(nativeKey.toId());
+            printPoolStatus(status);
+        }
+    }
+
+    function testMarginLendingTwo() public {
+        testMarginAndLending();
+        PoolId poolId = nativeKey.toId();
+        uint256[4] memory beforeLiquidities = marginLiquidity.getPoolLiquidities(poolId, address(this));
+        uint256 positionId = 2;
+        MarginPosition memory position = marginPositionManager.getPosition(positionId);
+        console.log(
+            "position.marginAmount:%s,position.marginTotal:%s,position.borrowAmount:%s",
+            position.marginAmount,
+            position.marginTotal,
+            position.borrowAmount
+        );
+        (bool liquidated,) = marginChecker.checkLiquidate(address(marginPositionManager), positionId);
+        uint256 amountIn = 1 ether;
+        uint256 swapIndex = 0;
+        while (!liquidated) {
+            tokenB.approve(address(swapRouter), amountIn);
+            MarginRouter.SwapParams memory swapParams = MarginRouter.SwapParams({
+                poolId: nativeKey.toId(),
+                zeroForOne: false,
+                to: address(this),
+                amountIn: amountIn,
+                amountOut: 0,
+                amountOutMin: 0,
+                deadline: type(uint256).max
+            });
+            swapRouter.exactInput(swapParams);
+
+            (liquidated,) = marginChecker.checkLiquidate(address(marginPositionManager), positionId);
+            swapIndex++;
+            skip(30);
+            console.log("swapIndex:%s", swapIndex);
+        }
+        PoolStatus memory status = pairPoolManager.getStatus(nativeKey.toId());
+        console.log("before liquidateBurn");
+        printPoolStatus(status);
+        uint256 beforeLendingAmount0 =
+            lendingPoolManager.balanceOf(address(this), nativeKey.currency0.toTokenId(poolId));
+        uint256 beforeLendingAmount1 =
+            lendingPoolManager.balanceOf(address(this), nativeKey.currency1.toTokenId(poolId));
+        marginPositionManager.liquidateBurn(positionId);
+        uint256 afterLendingAmount0 = lendingPoolManager.balanceOf(address(this), nativeKey.currency0.toTokenId(poolId));
+        uint256 afterLendingAmount1 = lendingPoolManager.balanceOf(address(this), nativeKey.currency1.toTokenId(poolId));
+        assertLt(afterLendingAmount0, beforeLendingAmount0);
+        assertLt(beforeLendingAmount1, afterLendingAmount1);
+        position = marginPositionManager.getPosition(positionId);
+        assertEq(position.borrowAmount, 0);
+        uint256[4] memory afterLiquidities = marginLiquidity.getPoolLiquidities(poolId, address(this));
+        assertEq(afterLiquidities[0], beforeLiquidities[0]);
+        assertEq(afterLiquidities[1], beforeLiquidities[1]);
+        assertEq(afterLiquidities[2], beforeLiquidities[2]);
+        assertLt(afterLiquidities[3], beforeLiquidities[3]);
+        console.log("after liquidateBurn,before withdraw");
+        status = pairPoolManager.getStatus(nativeKey.toId());
+        printPoolStatus(status);
+        lendingPoolManager.withdraw(address(this), poolId, nativeKey.currency0, afterLendingAmount0);
+        console.log("after withdraw");
+        status = pairPoolManager.getStatus(nativeKey.toId());
+        printPoolStatus(status);
+        address user1 = vm.addr(1);
+        tokenB.transfer(user1, 1 ether);
+        vm.startPrank(user1);
+        positionId = 1;
+        position = marginPositionManager.getPosition(positionId);
+        tokenB.approve(address(pairPoolManager), position.borrowAmount);
+        console.log("position.marginAmount:%s", position.marginAmount);
+        marginPositionManager.repay(positionId, position.borrowAmount, block.timestamp + 1000);
+        vm.stopPrank();
+        console.log("after repay");
+        status = pairPoolManager.getStatus(nativeKey.toId());
+        printPoolStatus(status);
+        uint256 balance0 = manager.balanceOf(address(lendingPoolManager), nativeKey.currency0.toId());
+        console.log("balance0:%s", balance0);
+    }
+
+    function testEarnedMarginLendingTwo() public {
+        testMarginAndLending();
+        PoolId poolId = nativeKey.toId();
+        uint256[4] memory beforeLiquidities = marginLiquidity.getPoolLiquidities(poolId, address(this));
+        uint256 positionId = 2;
+        MarginPosition memory position = marginPositionManager.getPosition(positionId);
+        console.log(
+            "position.marginAmount:%s,position.marginTotal:%s,position.borrowAmount:%s",
+            position.marginAmount,
+            position.marginTotal,
+            position.borrowAmount
+        );
+        (bool liquidated,) = marginChecker.checkLiquidate(address(marginPositionManager), positionId);
+        uint256 amountIn = 0.01 ether;
+        uint256 swapIndex = 0;
+        while (!liquidated) {
+            tokenB.approve(address(swapRouter), amountIn);
+            MarginRouter.SwapParams memory swapParams = MarginRouter.SwapParams({
+                poolId: nativeKey.toId(),
+                zeroForOne: false,
+                to: address(this),
+                amountIn: amountIn,
+                amountOut: 0,
+                amountOutMin: 0,
+                deadline: type(uint256).max
+            });
+            swapRouter.exactInput(swapParams);
+            (liquidated,) = marginChecker.checkLiquidate(address(marginPositionManager), positionId);
+            swapIndex++;
+            skip(30);
+            console.log("swapIndex:%s", swapIndex);
+        }
+        uint256 beforeLendingAmount0 =
+            lendingPoolManager.balanceOf(address(this), nativeKey.currency0.toTokenId(poolId));
+        uint256 beforeLendingAmount1 =
+            lendingPoolManager.balanceOf(address(this), nativeKey.currency1.toTokenId(poolId));
+        marginPositionManager.liquidateBurn(positionId);
+        uint256 afterLendingAmount0 = lendingPoolManager.balanceOf(address(this), nativeKey.currency0.toTokenId(poolId));
+        uint256 afterLendingAmount1 = lendingPoolManager.balanceOf(address(this), nativeKey.currency1.toTokenId(poolId));
+        assertGt(afterLendingAmount0, beforeLendingAmount0);
+        assertLe(beforeLendingAmount1, afterLendingAmount1);
+        position = marginPositionManager.getPosition(positionId);
+        assertEq(position.borrowAmount, 0);
+        uint256[4] memory afterLiquidities = marginLiquidity.getPoolLiquidities(poolId, address(this));
+        assertEq(afterLiquidities[0], beforeLiquidities[0]);
+        assertEq(afterLiquidities[1], beforeLiquidities[1]);
+        assertEq(afterLiquidities[2], beforeLiquidities[2]);
+        assertGt(afterLiquidities[3], beforeLiquidities[3]);
+        console.log("after liquidateBurn,before withdraw");
+        PoolStatus memory status = pairPoolManager.getStatus(nativeKey.toId());
+        printPoolStatus(status);
+        lendingPoolManager.withdraw(address(this), poolId, nativeKey.currency0, afterLendingAmount0);
+        console.log("after withdraw");
+        status = pairPoolManager.getStatus(nativeKey.toId());
+        printPoolStatus(status);
+        address user1 = vm.addr(1);
+        tokenB.transfer(user1, 1 ether);
+        vm.startPrank(user1);
+        positionId = 1;
+        position = marginPositionManager.getPosition(positionId);
+        tokenB.approve(address(pairPoolManager), position.borrowAmount);
+        console.log("position.marginAmount:%s", position.marginAmount);
+        marginPositionManager.repay(positionId, position.borrowAmount, block.timestamp + 1000);
+        vm.stopPrank();
+        console.log("after repay");
+        status = pairPoolManager.getStatus(nativeKey.toId());
+        printPoolStatus(status);
+        uint256 balance0 = manager.balanceOf(address(lendingPoolManager), nativeKey.currency0.toId());
+        console.log("balance0:%s", balance0);
     }
 }

@@ -20,22 +20,29 @@ interface IMarginFees {
     /// @return _fee The dynamic fee of swap transaction
     function dynamicFee(address _poolManager, PoolStatus memory status) external view returns (uint24 _fee);
 
-    function getAmountOut(address _poolManager, PoolStatus memory status, bool zeroForOne, uint256 amountIn)
-        external
-        view
-        returns (uint256 amountOut, uint24 fee, uint256 feeAmount);
-
-    function getAmountIn(address _poolManager, PoolStatus memory status, bool zeroForOne, uint256 amountOut)
-        external
-        view
-        returns (uint256 amountIn, uint24 fee, uint256 feeAmount);
-
     /// @notice Get the dynamic liquidity fee from the status of pool
     /// @param _poolManager The address of pool manager
     /// @param poolId The pool id
     /// @return _fee The dynamic fee of swap transaction
     /// @return _marginFee The fee of margin transaction
     function getPoolFees(address _poolManager, PoolId poolId) external view returns (uint24 _fee, uint24 _marginFee);
+
+    function computeDiff(address pairPoolManager, PoolStatus memory status, bool marginForOne, int256 diff)
+        external
+        view
+        returns (int256 interest0, int256 interest1, int256 lendingInterest);
+
+    function getMarginBorrow(PoolStatus memory status, MarginParams memory params)
+        external
+        view
+        returns (uint256 marginWithoutFee, uint256 marginFeeAmount, uint256 borrowAmount);
+
+    function getBorrowMaxAmount(
+        PoolStatus memory status,
+        uint256 marginAmount,
+        bool marginForOne,
+        uint256 minMarginLevel
+    ) external view returns (uint256 borrowMaxAmount);
 
     /// @notice Get the borrow rate from the reserves
     /// @param realReserve The real reserve of the pool
@@ -81,12 +88,12 @@ interface IMarginFees {
     function getProtocolFeeAmount(uint256 totalFee) external view returns (uint256 feeAmount);
 
     /// @notice Collects the protocol fees for a given recipient and currency, returning the amount collected
-    /// @param pool The address of pool
+    /// @param poolManager The address of pool manager
     /// @param recipient The address to receive the protocol fees
     /// @param currency The currency to withdraw
     /// @param amount The amount of currency to withdraw
     /// @return amountCollected The amount of currency successfully withdrawn
-    function collectProtocolFees(address pool, address recipient, Currency currency, uint256 amount)
+    function collectProtocolFees(address poolManager, address recipient, Currency currency, uint256 amount)
         external
         returns (uint256);
 }

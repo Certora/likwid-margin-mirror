@@ -10,9 +10,12 @@ import {PoolStatus} from "../types/PoolStatus.sol";
 import {IMarginFees} from "../interfaces/IMarginFees.sol";
 import {IMarginLiquidity} from "../interfaces/IMarginLiquidity.sol";
 import {ILendingPoolManager} from "../interfaces/ILendingPoolManager.sol";
+import {IPoolStatusManager} from "../interfaces/IPoolStatusManager.sol";
 
 interface IPairMarginManager {
     function lendingPoolManager() external view returns (ILendingPoolManager);
+
+    function statusManager() external view returns (IPoolStatusManager);
 
     /// @notice Get current IMarginFees
     function marginFees() external view returns (IMarginFees);
@@ -45,16 +48,23 @@ interface IPairMarginManager {
     /// @return amountOut an output amount
     function getAmountOut(PoolId poolId, bool zeroForOne, uint256 amountIn) external view returns (uint256 amountOut);
 
-    // ******************** EXTERNAL CALL ********************
+    // ******************** MARGIN FUNCTIONS ********************
+
+    function setBalances(PoolId poolId) external returns (PoolStatus memory _status);
 
     /// @notice Margin
     /// @param sender The address of sender
-    /// @param params The parameters for the margin hook
+    /// @param status The status for the pool
+    /// @param paramsVo The parameters for the margin hook
     /// @return The updated parameters for the margin hook
-    function margin(address sender, MarginParamsVo memory params) external payable returns (MarginParamsVo memory);
+    function margin(address sender, PoolStatus memory status, MarginParamsVo memory paramsVo)
+        external
+        payable
+        returns (MarginParamsVo memory);
 
     /// @notice Release
+    /// @param status The status for the pool
     /// @param params The parameters for the release hook
     /// @return The amount of tokens repaid
-    function release(ReleaseParams memory params) external payable returns (uint256);
+    function release(PoolStatus memory status, ReleaseParams memory params) external payable returns (uint256);
 }

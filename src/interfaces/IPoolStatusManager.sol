@@ -20,19 +20,35 @@ interface IPoolStatusManager is IStatusBase {
 
     function getStatus(PoolId poolId) external view returns (PoolStatus memory _status);
 
+    function getAmountOut(PoolStatus memory status, bool zeroForOne, uint256 amountIn)
+        external
+        view
+        returns (uint256 amountOut, uint24 fee, uint256 feeAmount);
+
+    function getAmountIn(PoolStatus memory status, bool zeroForOne, uint256 amountOut)
+        external
+        view
+        returns (uint256 amountIn, uint24 fee, uint256 feeAmount);
+
     function protocolFeesAccrued(Currency currency) external view returns (uint256);
 
-    function getBalances(PoolKey memory key) external view returns (BalanceStatus memory balanceStatus);
+    function setBalances(PoolId poolId) external returns (PoolStatus memory _status);
 
-    function setBalances(PoolKey memory key) external returns (BalanceStatus memory balanceStatus);
+    function updateInterests(PoolId poolId) external returns (PoolStatus memory _status);
 
-    function updateInterests(PoolKey memory key) external;
+    function update(PoolId poolId, bool fromMargin) external;
 
-    function update(PoolKey memory key, bool fromMargin) external returns (BalanceStatus memory afterStatus);
+    function update(PoolId poolId) external;
 
-    function update(PoolKey memory key) external returns (BalanceStatus memory afterStatus);
+    function updateLendingPoolStatus(PoolId poolId) external;
 
     function updateProtocolFees(Currency currency, uint256 amount) external returns (uint256 restAmount);
 
     function collectProtocolFees(Currency currency, uint256 amount) external returns (uint256 amountCollected);
+
+    // ******************** HOOK CALL ********************
+
+    function setBalances(PoolKey calldata key) external;
+
+    function updateBalances(PoolKey calldata key) external;
 }

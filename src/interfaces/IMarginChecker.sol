@@ -9,7 +9,6 @@ import {MarginPosition, MarginPositionVo} from "../types/MarginPosition.sol";
 import {PoolStatus} from "../types/PoolStatus.sol";
 import {MarginParams, MarginParamsVo} from "../types/MarginParams.sol";
 import {LiquidateStatus} from "../types/LiquidateStatus.sol";
-import {BurnParams} from "../types/BurnParams.sol";
 
 interface IMarginChecker {
     /// @notice Get the liquidation margin level
@@ -19,6 +18,10 @@ interface IMarginChecker {
     /// @notice Get the min margin level
     /// @return minMarginLevel The min margin level
     function minMarginLevel() external view returns (uint24);
+
+    /// @notice Get the min borrow level
+    /// @return minMarginLevel The min margin level
+    function minBorrowLevel() external view returns (uint24);
 
     /// @notice Get the profit millionth of the caller and the protocol
     /// @return callerProfitMillion The profit of the caller in millions
@@ -57,11 +60,10 @@ interface IMarginChecker {
         view
         returns (MarginPosition memory);
 
-    function checkMinMarginLevel(
-        IPairMarginManager poolManager,
-        MarginParamsVo memory paramsVo,
-        PoolStatus memory _status
-    ) external view returns (bool valid);
+    function checkMinMarginLevel(MarginParamsVo memory paramsVo, PoolStatus memory _status)
+        external
+        view
+        returns (bool valid);
 
     /// @notice Get the marginTotal amount and borrow amount for the given pool, leverage, and marginAmount
     /// @param poolManager The manager of the pool
@@ -118,7 +120,7 @@ interface IMarginChecker {
         view
         returns (uint256 reserveBorrow, uint256 reserveMargin);
 
-    function getLiquidateStatus(address pairPoolManager, PoolId poolId, bool marginForOne)
+    function getLiquidateStatus(address pairPoolManager, PoolStatus memory _status, bool marginForOne)
         external
         view
         returns (LiquidateStatus memory liquidateStatus);
@@ -153,16 +155,4 @@ interface IMarginChecker {
         external
         view
         returns (bool[] memory liquidatedList, uint256[] memory borrowAmountList);
-
-    /// @notice Check if the position is liquidated
-    /// @param poolManager The manager of the pool
-    /// @param _liqStatus The status of Liquidate
-    /// @param inPositions The input positions
-    /// @return liquidatedList  The liquidated list
-    /// @return borrowAmountList  The borrow amount list
-    function checkLiquidate(
-        IPairMarginManager poolManager,
-        LiquidateStatus memory _liqStatus,
-        MarginPosition[] memory inPositions
-    ) external view returns (bool[] memory liquidatedList, uint256[] memory borrowAmountList);
 }

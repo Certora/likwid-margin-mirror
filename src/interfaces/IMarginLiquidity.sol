@@ -7,11 +7,11 @@ import {IERC6909Accrues} from "../interfaces/external/IERC6909Accrues.sol";
 import {PoolStatus} from "../types/PoolStatus.sol";
 
 interface IMarginLiquidity is IERC6909Accrues {
-    function addLiquidity(address receiver, uint256 id, uint8 level, uint256 amount)
-        external
-        returns (uint256 liquidity);
+    function addLiquidity(address receiver, uint256 id, uint8 level, uint256 amount) external;
 
-    function removeLiquidity(address sender, uint256 id, uint8 level, uint256 amount)
+    function removeLiquidity(address sender, uint256 id, uint8 level, uint256 amount) external;
+
+    function changeLiquidity(PoolId poolId, uint256 _reserve0, uint256 _reserve1, int256 interest0, int256 interest1)
         external
         returns (uint256 liquidity);
 
@@ -29,12 +29,12 @@ interface IMarginLiquidity is IERC6909Accrues {
         returns (uint256 totalSupply, uint256 retainSupply0, uint256 retainSupply1);
 
     /// Get the supplies of pool status
-    /// @param pool The address of pool manager
+    /// @param poolManager The address of pool manager
     /// @param poolId The pool id
     /// @return totalSupply The total supply
     /// @return retainSupply0 The level1+level3 supply(can't mirror x)
     /// @return retainSupply1 The level1+level2 supply(can't mirror y)
-    function getPoolSupplies(address pool, PoolId poolId)
+    function getPoolSupplies(address poolManager, PoolId poolId)
         external
         view
         returns (uint256 totalSupply, uint256 retainSupply0, uint256 retainSupply1);
