@@ -106,8 +106,12 @@ invariant ValidStatusInitializedPools(PoolManager.PoolId poolId)
         PoolStatusManager.statusStore[poolId].rate0CumulativeLast == 0 &&
         PoolStatusManager.statusStore[poolId].rate1CumulativeLast == 0 &&
         PoolStatusManager.statusStore[poolId].blockTimestampLast == 0 &&
+        PoolStatusManager.statusStore[poolId].realReserve0 == 0 &&
+        PoolStatusManager.statusStore[poolId].realReserve1 == 0 &&
         PoolStatusManager.statusStore[poolId].mirrorReserve0 == 0 &&
         PoolStatusManager.statusStore[poolId].mirrorReserve1 == 0 &&
+        PoolStatusManager.statusStore[poolId].lendingRealReserve0 == 0 &&
+        PoolStatusManager.statusStore[poolId].lendingRealReserve1 == 0 &&
         PoolStatusManager.statusStore[poolId].lendingMirrorReserve0 == 0 &&
         PoolStatusManager.statusStore[poolId].lendingMirrorReserve1 == 0 &&
         PoolStatusManager.statusStore[poolId].key.hooks == 0 &&
@@ -153,6 +157,7 @@ rule releaseEndsWithZeroVirtualAccounting()
     env e;
     require e.msg.sender != PM;
     PairPoolManager.ReleaseParams params;
+    require params.payer != PM;
     PoolStatusManager.PoolStatus status;
     require Helper.PoolKeyToId(status.key) == params.poolId;
     requireInvariant ValidStatusInitializedPools(params.poolId);
@@ -188,7 +193,8 @@ rule swapMirrorEndsWithZeroVirtualAccounting()
     require sender != PM;
     
     require zeroCurrencyDeltaForAll();
-        //PM.sync(e, Helper.toCurrency(PM._synchedCurrency));
+        //env eSync;
+        //PM.sync(eSync, Helper.toCurrency(PM._synchedCurrency));
         PairPoolManager.swapMirror(e, sender, recipient, poolId, zeroForOne, amountIn);
     assert zeroCurrencyDeltaForAll();
 }
@@ -206,7 +212,8 @@ rule marginEndsWithZeroVirtualAccounting()
     requireInvariant ValidStatusInitializedPools(paramsVo.params.poolId);
     
     require zeroCurrencyDeltaForAll();
-        //PM.sync(e, Helper.toCurrency(PM._synchedCurrency));
+        //env eSync;
+        //PM.sync(eSync, Helper.toCurrency(PM._synchedCurrency));
         PairPoolManager.margin(e, sender, status, paramsVo);
     assert zeroCurrencyDeltaForAll();
 }

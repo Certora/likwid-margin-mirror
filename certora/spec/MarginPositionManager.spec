@@ -19,7 +19,7 @@ function equalKeys(PoolStatusManager.PoolKey keyA, PoolStatusManager.PoolKey key
         keyA.currency1 == keyB.currency1 &&
         keyA.hooks == keyB.hooks &&
         keyA.fee == keyB.fee;
-        /// We don't care about key.tick.
+        /// We don't care about key.tickSpacing.
 }
 
 function setBalancesSummary(address caller, PoolManager.PoolId poolId) returns PoolStatusManager.PoolStatus {
