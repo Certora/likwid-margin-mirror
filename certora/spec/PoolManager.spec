@@ -106,6 +106,10 @@ invariant ValidStatusInitializedPools(PoolManager.PoolId poolId)
         PoolStatusManager.statusStore[poolId].rate0CumulativeLast == 0 &&
         PoolStatusManager.statusStore[poolId].rate1CumulativeLast == 0 &&
         PoolStatusManager.statusStore[poolId].blockTimestampLast == 0 &&
+        PoolStatusManager.statusStore[poolId].mirrorReserve0 == 0 &&
+        PoolStatusManager.statusStore[poolId].mirrorReserve1 == 0 &&
+        PoolStatusManager.statusStore[poolId].lendingMirrorReserve0 == 0 &&
+        PoolStatusManager.statusStore[poolId].lendingMirrorReserve1 == 0 &&
         PoolStatusManager.statusStore[poolId].key.hooks == 0 &&
         PoolStatusManager.statusStore[poolId].key.currency1 == 0 &&
         PoolStatusManager.statusStore[poolId].key.currency0 == 0 &&

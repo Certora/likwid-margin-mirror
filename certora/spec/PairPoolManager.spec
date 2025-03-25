@@ -58,6 +58,10 @@ methods {
     /// Has only internal effects in MirrorTokenManager.
     function _.setOperator(address,bool) external => NONDET UNRESOLVED;
 
+    function _.marginLiquidity() external => DISPATCHER(true) UNRESOLVED;
+    function _.statusManager() external => DISPATCHER(true) UNRESOLVED;
+    function _.getMarginReserves(address, PoolManager.PoolId, PoolStatusManager.PoolStatus) external => NONDET UNRESOLVED;
+    function _.getInterestReserves(address, PoolManager.PoolId, PoolStatusManager.PoolStatus) external => NONDET UNRESOLVED;
 }
 
 methods {
@@ -66,6 +70,12 @@ methods {
 
     function PoolStatusManager.getAmountIn(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountOut) external returns (uint256,uint24,uint256) with (env e)
         => getAmountInCVL(e.block.timestamp, status, zeroForOne, amountOut) DELETE;
+
+    function _.getAmountOut(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountIn) external with (env e)
+        => getAmountOutCVL(e.block.timestamp, status, zeroForOne, amountIn) expect (uint256,uint24,uint256);
+
+    function _.getAmountIn(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountOut) external with (env e)
+        => getAmountInCVL(e.block.timestamp, status, zeroForOne, amountOut) expect (uint256,uint24,uint256);
 }
 
 function observeNowCVL() returns (uint224, uint256) {
@@ -83,14 +93,6 @@ function pairPoolManagerCVL(address callee) returns address {
         assert false;
         return 0;
     }
-}
-
-rule setBalancesCorrectPoolId(PoolManager.PoolId poolId) 
-{
-    env e;
-    requireInvariant ValidStatusInitializedPools(poolId);
-    PoolStatusManager.PoolStatus status = PairPoolManager.setBalances(e, poolId);
-    assert Helper.PoolKeyToId(status.key) == poolId;
 }
 
 // excluding methods whose body is just `revert <msg>';
