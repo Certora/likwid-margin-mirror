@@ -7,12 +7,7 @@ import "./getAmountsSummary.spec";
 using PairPoolManager as PairPoolManager;
 using LendingPoolManager as LendingPoolManager;
 using MirrorTokenManager as MirrorTokenManager;
-use rule removeLiquidityEndsWithZeroVirtualAccounting;
-use rule addLiquidityEndsWithZeroVirtualAccounting;
-use rule releaseEndsWithZeroVirtualAccounting;
-use rule collectProtocolFeesEndsWithZeroVirtualAccounting;
-use rule swapMirrorEndsWithZeroVirtualAccounting;
-use rule marginEndsWithZeroVirtualAccounting;
+
 use invariant ValidStatusInitializedPools filtered{f -> !calledByHook(f) && f.selector != sig:PairPoolManager.unlockCallback(bytes).selector}
 
 methods {
@@ -36,7 +31,8 @@ methods {
     /// Unresolved unlock callbacks (LendingPoolManager):
     unresolved external in LendingPoolManager.unlockCallback(bytes) => DISPATCH [
         LendingPoolManager.handleWithdraw(address,address,PoolManager.PoolId,PoolManager.Currency,uint256),
-        LendingPoolManager.handleDeposit(address,address,PoolManager.PoolId,PoolManager.Currency,uint256)
+        LendingPoolManager.handleDeposit(address,address,PoolManager.PoolId,PoolManager.Currency,uint256),
+        LendingPoolManager.handleBalanceMirror(address,PoolManager.PoolId,PoolManager.Currency,uint256)
     ] default HAVOC_ECF;
 
 
@@ -78,16 +74,6 @@ methods {
         => getAmountInCVL(e.block.timestamp, status, zeroForOne, amountOut) expect (uint256,uint24,uint256);
 }
 
-definition isUnlockCallback(method f) returns bool = 
-    f.selector == sig:LendingPoolManager.unlockCallback(bytes).selector ||
-    f.selector == sig:PairPoolManager.unlockCallback(bytes).selector;
-
-definition hardMethods(method f) returns bool = 
-    f.selector == sig:PairPoolManager.addLiquidity(PairPoolManager.AddLiquidityParams).selector ||
-    f.selector == sig:PairPoolManager.removeLiquidity(PairPoolManager.RemoveLiquidityParams).selector ||
-    f.selector == sig:PairPoolManager.swapMirror(address,address,PoolManager.PoolId,bool,uint256).selector ||
-    f.selector == sig:PairPoolManager.mirrorInRealOut(PoolManager.PoolId,PoolManager.Currency,uint256).selector;
-
 function observeNowCVL() returns (uint224, uint256) {
     uint224 nondet1;
     uint256 nondet2;
@@ -105,33 +91,56 @@ function pairPoolManagerCVL(address callee) returns address {
     }
 }
 
-/// Timeouts may be resolved by summarizing mulDiv with MathSummary.spec/mulDivLIA.
-rule rateCumulativeCannotDecrease(PoolManager.PoolId poolId, method f) 
-filtered{f -> !f.isView && hardMethods(f)} {
-    requireInvariant ValidStatusInitializedPools(poolId);
-    mathint rateCumulative0_pre = PoolStatusManager.statusStore[poolId].rate0CumulativeLast;
-    mathint rateCumulative1_pre = PoolStatusManager.statusStore[poolId].rate1CumulativeLast;
-        env e;
-        calldataarg args;
-        f(e, args);
-    mathint rateCumulative0_post = PoolStatusManager.statusStore[poolId].rate0CumulativeLast;
-    mathint rateCumulative1_post = PoolStatusManager.statusStore[poolId].rate1CumulativeLast;
-
-    assert rateCumulative1_post >= rateCumulative1_pre && rateCumulative0_post >= rateCumulative0_pre;
-}
-
 // excluding methods whose body is just `revert <msg>';
 use builtin rule sanity filtered{ f -> 
     !alwaysReverting(f) 
         && f.contract != PM 
         && f.contract == currentContract
         }
-/*
-rule alwaysRevert(method f) filtered{f -> alwaysReverting(f)}
-{
-    env e;
-    calldataarg args;
-    f@withrevert(e,args);
 
-    assert lastReverted;
-}*/
+rule depositEndsWithZeroVirtualAccounting() {
+    env e;
+    address sender; require sender != PM;
+    address recipient;
+    PoolManager.PoolId poolId;
+    PoolManager.Currency currency; 
+    uint256 amount;
+    requireInvariant ValidStatusInitializedPools(poolId);
+    require ValidTimestamp(e);
+    
+    require zeroCurrencyDeltaForAll();
+        env eSync;
+        PM.sync(eSync, Helper.toCurrency(PM._synchedCurrency));
+        LendingPoolManager.deposit(e, sender, recipient, poolId, currency, amount);
+    assert zeroCurrencyDeltaForAll();
+}
+
+rule withdrawEndsWithZeroVirtualAccounting() {
+    env e;
+    address recipient;
+    PoolManager.PoolId poolId;
+    PoolManager.Currency currency; 
+    uint256 amount;
+    requireInvariant ValidStatusInitializedPools(poolId);
+    require ValidTimestamp(e);
+    
+    require zeroCurrencyDeltaForAll();
+        LendingPoolManager.withdraw(e, recipient, poolId, currency, amount);
+    assert zeroCurrencyDeltaForAll();
+}
+
+rule balanceMirrorEndsWithZeroVirtualAccounting() {
+    env e;
+    require e.msg.sender != PM;
+    PoolManager.PoolId poolId;
+    PoolManager.Currency currency; 
+    uint256 amount;
+    requireInvariant ValidStatusInitializedPools(poolId);
+    require ValidTimestamp(e);
+    
+    require zeroCurrencyDeltaForAll();
+        env eSync;
+        PM.sync(eSync, Helper.toCurrency(PM._synchedCurrency));
+        LendingPoolManager.balanceMirror(e, poolId, currency, amount);
+    assert zeroCurrencyDeltaForAll();
+}

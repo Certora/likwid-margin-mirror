@@ -89,7 +89,7 @@ rule validateUnlockCallbackSender() {
     assert _poolManager == e.msg.sender;
 }
 
-/// @title Valid status store for initalized pools
+/// @title Valid status store for pools
 invariant ValidStatusInitializedPools(PoolManager.PoolId poolId)
     (pool_is_initialized[poolId] => (/// Initialized
         PoolStatusManager.statusStore[poolId].rate0CumulativeLast > 0 &&
@@ -193,8 +193,6 @@ rule swapMirrorEndsWithZeroVirtualAccounting()
     require sender != PM;
     
     require zeroCurrencyDeltaForAll();
-        //env eSync;
-        //PM.sync(eSync, Helper.toCurrency(PM._synchedCurrency));
         PairPoolManager.swapMirror(e, sender, recipient, poolId, zeroForOne, amountIn);
     assert zeroCurrencyDeltaForAll();
 }
