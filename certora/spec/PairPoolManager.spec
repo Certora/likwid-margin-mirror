@@ -235,6 +235,7 @@ rule marginDoesNotChangeBalances {
     env e;
     // calldataarg args;
     address sender;
+    PairPoolManager.PoolStatus status;
     PairPoolManager.MarginParamsVo paramsVo;
     PairPoolManager.MarginParams params = paramsVo.params;
 
@@ -242,7 +243,7 @@ rule marginDoesNotChangeBalances {
     uint256 preReserve1; 
     (preReserve0, preReserve1) = getReserves(e, params.poolId);
 
-    margin(e, sender, paramsVo);
+    margin(e, sender, status, paramsVo);
 
     uint256 postReserve0; 
     uint256 postReserve1; 
@@ -251,6 +252,27 @@ rule marginDoesNotChangeBalances {
     assert preReserve0 == postReserve0;
     assert preReserve1 == postReserve1;
 }
+
+rule releaseDoesNotChangeBalances {
+    env e;
+    // calldataarg args;
+    PairPoolManager.PoolStatus status;
+    PairPoolManager.ReleaseParams params;
+
+    uint256 preReserve0; 
+    uint256 preReserve1; 
+    (preReserve0, preReserve1) = getReserves(e, params.poolId);
+
+    release(e, status, params);
+
+    uint256 postReserve0; 
+    uint256 postReserve1; 
+    (postReserve0, postReserve1) = getReserves(e, params.poolId);
+
+    assert preReserve0 == postReserve0;
+    assert preReserve1 == postReserve1;
+}
+
 
 rule addLiquidityPreservesShares() {
     env e;
@@ -267,4 +289,50 @@ rule addLiquidityPreservesShares() {
     (postTotalSupply, _, _) = getSupplies(e, poolId);
 
     assert preTotalSupply <= postTotalSupply;
+}
+
+rule removeLiquidityPreservesShares() {
+    env e;
+    PairPoolManager.RemoveLiquidityParams params;
+
+    uint256 preTotalSupply;
+    uint256 poolId = getPoolId(e, params.poolId);
+
+    (preTotalSupply, _, _) = getSupplies(e, poolId);
+
+    removeLiquidity(e, params);
+
+    uint256 postTotalSupply;
+    (postTotalSupply, _, _) = getSupplies(e, poolId);
+
+    assert preTotalSupply >= postTotalSupply;
+}
+
+rule roundTripSwapResultsInLoss() {
+    env e;
+    
+    address sender;
+    PairPoolManager.PoolKey key;
+    IPoolManager.SwapParams firstSwap;
+    IPoolManager.SwapParams reverseSwap;
+    
+    // Store initial state
+    mathint initialAmount = (firstSwap.amountSpecified);
+    
+    // Rule setup requirements 
+    require firstSwap.zeroForOne == true;
+    require firstSwap.zeroForOne != reverseSwap.zeroForOne; // Swaps must be in opposite directions
+    require firstSwap.amountSpecified < 0;
+
+    // Execute first swap
+    uint256 amountOut;
+    (_, _, _, amountOut, _) = swap(e, sender, key, firstSwap);
+    
+    // Execute reverse swap using the output as input
+    require reverseSwap.amountSpecified == -amountOut;
+    uint256 finalAmount;
+    (_, _, _, finalAmount, _) = swap(e, sender, key, reverseSwap);
+    
+    // Final amount should be less than initial due to fees
+    assert finalAmount <= initialAmount;
 }
