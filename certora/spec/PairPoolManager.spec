@@ -105,9 +105,10 @@ function pairPoolManagerCVL(address callee) returns address {
     }
 }
 
+/// @title The rate cumulative last value can never decrease, for any pool.
 /// Timeouts may be resolved by summarizing mulDiv with MathSummary.spec/mulDivLIA.
 rule rateCumulativeCannotDecrease(PoolManager.PoolId poolId, method f) 
-filtered{f -> !f.isView && hardMethods(f)} {
+filtered{f -> !f.isView} {
     requireInvariant ValidStatusInitializedPools(poolId);
     mathint rateCumulative0_pre = PoolStatusManager.statusStore[poolId].rate0CumulativeLast;
     mathint rateCumulative1_pre = PoolStatusManager.statusStore[poolId].rate1CumulativeLast;
@@ -125,7 +126,7 @@ use builtin rule sanity filtered{ f ->
     !alwaysReverting(f) 
         && f.contract != PM 
         && f.contract == currentContract
-        }
+}
 /*
 rule alwaysRevert(method f) filtered{f -> alwaysReverting(f)}
 {

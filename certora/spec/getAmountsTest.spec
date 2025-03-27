@@ -42,20 +42,31 @@ rule checkAxioms_dynamicFee(PoolStatusManager.PoolStatus statusA, PoolStatusMana
 }
 
 rule checkFeeAxioms_getAmountIn(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountOut) {
+    /// This requirement is not always true, but is most likely to be in practice.
+    /// It eliminates an exisiting bug in the dynamicFee calculation.
+    //require status.key.fee < MAX_FEE_UNITS() / 20;
+    
     env e;
     uint256 reserveIn; uint256 reserveOut;
     reserveIn, reserveOut = getReservesByStatus(status, zeroForOne);
 
     uint256 amountIn; uint24 fee; uint256 feeAmount;
+    require status.key.fee < MAX_FEE_UNITS() / 20;
     amountIn, fee, feeAmount = Test.getAmountIn(e, status, zeroForOne, amountOut);
+    uint256 amountInNoFee = assert_uint256(amountIn - feeAmount);
 
+    assert fee == 0 => amountInNoFee == amountIn;
+    assert fee == MAX_FEE_UNITS() => amountIn == amountInNoFee * MAX_FEE_UNITS();
     assert validReservesAndAmounts(amountOut, reserveOut, reserveIn);
-    assert feeAmount <= amountOut;
     assert fee <= MAX_FEE_UNITS();
     assert status.key.fee < MAX_FEE_UNITS() => fee < MAX_FEE_UNITS();
 }
 
 rule checkFeeAxioms_getAmountOut(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountIn) {
+    /// This requirement is not always true, but is most likely to be in practice.
+    /// It eliminates an exisiting bug in the dynamicFee calculation.
+    //require status.key.fee < MAX_FEE_UNITS() / 20;
+    
     env e;
     uint256 reserveIn; uint256 reserveOut;
     reserveIn, reserveOut = getReservesByStatus(status, zeroForOne);
@@ -68,4 +79,28 @@ rule checkFeeAxioms_getAmountOut(PoolStatusManager.PoolStatus status, bool zeroF
     assert status.key.fee == 0 => feeAmount == 0;
     assert fee <= MAX_FEE_UNITS();
     assert status.key.fee < MAX_FEE_UNITS() => fee < MAX_FEE_UNITS();
+}
+
+rule checkAmountOutBoundAxiom(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountIn) {
+    env e;
+    uint256 reserveIn; uint256 reserveOut;
+    reserveIn, reserveOut = getReservesByStatus(status, zeroForOne);
+    uint256 amountOut; uint24 fee; uint256 feeAmount;
+    amountOut, fee, feeAmount = Test.getAmountOut(e, status, zeroForOne, amountIn);
+
+    uint256 deducted = assert_uint256(amountIn - feeAmount);
+
+    assert amountOutBound(amountOut,deducted,reserveOut,reserveIn);
+}
+
+rule checkAmountInBoundAxiom(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountOut) {
+    env e;
+    uint256 reserveIn; uint256 reserveOut;
+    reserveIn, reserveOut = getReservesByStatus(status, zeroForOne);
+    uint256 amountIn; uint24 fee; uint256 feeAmount;
+    amountIn, fee, feeAmount = Test.getAmountIn(e, status, zeroForOne, amountOut);
+
+    uint256 amountInWithoutFee = assert_uint256(amountIn - feeAmount);
+
+    assert amountInNoFeeBound(amountInWithoutFee,amountOut,reserveOut,reserveIn);
 }

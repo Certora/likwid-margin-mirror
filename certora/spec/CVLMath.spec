@@ -140,6 +140,23 @@ function mulDivUpCVL_no_div(uint256 x, uint256 y, uint256 z) returns uint256 {
     return require_uint256(res + 1);
 }
 
+/// Linear over-approximation for mulDiv()
+persistent ghost _mulDivLIA(uint256,uint256,uint256) returns uint256;
+function mulDivLIA(uint256 x,uint256 y,uint256 z) returns uint256
+{
+    require z !=0;
+    require 
+        (y > z => _mulDivLIA(x,y,z) >= x) &&
+        (x > z => _mulDivLIA(x,y,z) >= y) &&
+        (y == z => _mulDivLIA(x,y,z) == x) &&
+        (x == z => _mulDivLIA(x,y,z) == y) &&
+        _mulDivLIA(x,y,z) == _mulDivLIA(y,x,z) &&
+        _mulDivLIA(0, x, y) == 0 && 
+        _mulDivLIA(x, 0 ,y) == 0;
+
+    return _mulDivLIA(x,y,z);
+}
+
 /*
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Misc functions                                                                             

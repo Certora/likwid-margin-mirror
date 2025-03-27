@@ -33,7 +33,6 @@ returns (uint256,uint24,uint256) {
     require amountOut < reserveOut;
     /* Deterministic approach (has limited dependency) */
     uint24 fee = dynamicFeeCVL(timestamp, status.marginTimestampLast, status.key.fee);
-
     uint256 amountInWithoutFee = amountInNoFeeCVL(amountOut, reserveOut, reserveIn);
     uint256 amountIn = attachedAmountInCVL(fee, amountInWithoutFee);
     uint256 feeAmount = assert_uint256(amountIn - amountInWithoutFee);
@@ -62,8 +61,38 @@ ghost dynamicFeeCVL(uint256 /* timestamp */, uint256 /* last timestamp */, uint2
 }
 
 /// Ghost summary for amounts based on reserves and fees
-ghost amountInNoFeeCVL(uint256 /* amountOut */, uint256 /* reserveOut */, uint256 /* reserveIn */) returns uint256;
-ghost amountOutCVL(uint256 /* deducted */, uint256 /* reserveOut */, uint256 /* reserveIn */) returns uint256;
+
+/*
+uint256 numerator = reserveIn * amountOut;
+uint256 denominator = (reserveOut - amountOut);
+uint256 amountInWithoutFee = (numerator / denominator) + 1;
+*/
+definition amountInNoFeeBound(uint256 amountInNoFee,uint256 amountOut,uint256 reserveOut,uint256 reserveIn) returns bool = 
+    (amountInNoFee - 1) * (reserveOut - amountOut) <= reserveIn * amountOut
+    &&
+    (amountInNoFee - 1) * (reserveOut - amountOut) > (reserveIn + 1) * amountOut - reserveOut;
+
+ghost amountInNoFeeCVL(uint256 /* amountOut */, uint256 /* reserveOut */, uint256 /* reserveIn */) returns uint256
+{
+    axiom forall uint256 amountOut. forall uint256 reserveOut. forall uint256 reserveIn.
+        amountInNoFeeBound(amountInNoFeeCVL(amountOut,reserveOut,reserveIn),amountOut,reserveOut,reserveIn);
+}
+
+/*
+uint256 numerator = amountInWithoutFee * reserveOut;
+uint256 denominator = reserveIn + amountInWithoutFee;
+amountOut = numerator / denominator;
+*/
+definition amountOutBound(uint256 amountOut,uint256 deducted,uint256 reserveOut,uint256 reserveIn) returns bool = 
+    amountOut * (reserveIn + deducted) <= deducted * reserveOut
+    &&
+    amountOut * (reserveIn + deducted) >= deducted * (reserveOut - 1) - reserveIn;
+
+ghost amountOutCVL(uint256 /* deducted */, uint256 /* reserveOut */, uint256 /* reserveIn */) returns uint256
+{
+    axiom forall uint256 deducted. forall uint256 reserveOut. forall uint256 reserveIn. 
+        amountOutBound(amountOutCVL(deducted, reserveOut, reserveIn),deducted, reserveOut, reserveIn);
+}
 
 ghost attachedAmountInCVL(uint24 /* fee */, uint256 /* amountInNoFees */) returns uint256 {
     axiom forall uint24 fee. forall uint256 amount.
