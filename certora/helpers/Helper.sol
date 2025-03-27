@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Currency } from "lib/v4-periphery/lib/v4-core/src/types/Currency.sol";
+import { Currency, CurrencyLibrary } from "lib/v4-periphery/lib/v4-core/src/types/Currency.sol";
 import { BalanceDeltaLibrary, BalanceDelta } from "lib/v4-periphery/lib/v4-core/src/types/BalanceDelta.sol";
 import { PoolIdLibrary, PoolId} from "lib/v4-periphery/lib/v4-core/src/types/PoolId.sol";
 import {PoolKey} from "lib/v4-periphery/lib/v4-core/src/types/PoolKey.sol";
@@ -25,6 +25,10 @@ contract Helper {
 
     function toCurrency(address token) public pure returns (Currency) {
         return Currency.wrap(token);
+    }
+
+    function toId(Currency currency) external pure returns (uint256) {
+        return CurrencyLibrary.toId(currency);
     }
 
     function amount0(BalanceDelta balanceDelta) external pure returns (int128) {

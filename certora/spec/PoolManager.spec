@@ -1,14 +1,21 @@
 using PoolManager as PM;
 using MarginHook as Hook;
+using MirrorTokenManager as MT;
 
 methods {
     function PM._swap(int256 amountToSwap) internal returns (int256) => assertZeroDelta(amountToSwap);
+    function PM._initializePool(PoolManager.PoolId poolId, uint160 sqrtPriceX96) internal returns int24 => initializePoolCVL(poolId,sqrtPriceX96);
+
     /// Pure function is summarized by a generic arbitrary mapping - this is logically sound.
     function Hooks.hasPermission(address self, uint160 flag) internal returns (bool) => CVLHasPermission(self, flag);
+
     function Helper.PoolKeyToId(PoolManager.PoolKey) external returns (PoolManager.PoolId) envfree;
     function Helper.toCurrency(address token) external returns (PoolManager.Currency) envfree;
     function Helper.getPriceX112FromReserves(uint256 _reserve0, uint256 _reserve1) external returns (uint224,uint224) envfree;
-    function PM._initializePool(PoolManager.PoolId poolId, uint160 sqrtPriceX96) internal returns int24 => initializePoolCVL(poolId,sqrtPriceX96);
+    function Helper.toId(PoolManager.Currency) external returns (uint256) envfree;
+    function Helper.toTokenId(PoolManager.Currency, PoolManager.PoolKey) external returns (uint256) envfree;
+    function PM.balanceOf(address,uint256) external returns (uint256) envfree;
+    function MT.balanceOf(address,uint256) external returns (uint256) envfree;
 }
 
 definition ONE_TRILLION() returns uint256 = 10^12;
@@ -90,16 +97,39 @@ rule validateUnlockCallbackSender() {
     assert _poolManager == e.msg.sender;
 }
 
+/// Auxiliary getters of token IDs from status store poolId.
+
+function currency0IdFromPoolId(PoolManager.PoolId poolId) returns uint256 {
+    return Helper.toId(PoolStatusManager.statusStore[poolId].key.currency0);
+}
+
+function currency1IdFromPoolId(PoolManager.PoolId poolId) returns uint256 {
+    return Helper.toId(PoolStatusManager.statusStore[poolId].key.currency1);
+}
+
+function currency0TokenIdFromPoolId(PoolManager.PoolId poolId) returns uint256 {
+    return Helper.toTokenId(PoolStatusManager.statusStore[poolId].key.currency0, PoolStatusManager.getKey(poolId));
+}
+
+function currency1TokenIdFromPoolId(PoolManager.PoolId poolId) returns uint256 {
+    return Helper.toTokenId(PoolStatusManager.statusStore[poolId].key.currency1, PoolStatusManager.getKey(poolId));
+}
+
 /// @title Valid status store for pools
 invariant ValidStatusInitializedPools(PoolManager.PoolId poolId)
     (pool_is_initialized[poolId] => (/// Initialized
-        PoolStatusManager.statusStore[poolId].rate0CumulativeLast > 0 &&
-        PoolStatusManager.statusStore[poolId].rate1CumulativeLast > 0 &&
+        PoolStatusManager.statusStore[poolId].rate0CumulativeLast >= ONE_TRILLION() &&
+        PoolStatusManager.statusStore[poolId].rate1CumulativeLast >= ONE_TRILLION() &&
         PoolStatusManager.statusStore[poolId].blockTimestampLast > 0 &&
         PoolStatusManager.statusStore[poolId].key.hooks == Hook &&
         PoolStatusManager.statusStore[poolId].key.currency1 > 0 &&
-            PoolStatusManager.statusStore[poolId].key.currency1 > 
-            PoolStatusManager.statusStore[poolId].key.currency0 &&
+        PoolStatusManager.statusStore[poolId].key.currency1 > PoolStatusManager.statusStore[poolId].key.currency0 &&
+            ///
+            PoolStatusManager.statusStore[poolId].realReserve0 <= PM.balanceOf(PairPoolManager, currency0IdFromPoolId(poolId)) &&
+            PoolStatusManager.statusStore[poolId].realReserve1 <= PM.balanceOf(PairPoolManager, currency1IdFromPoolId(poolId)) &&
+            PoolStatusManager.statusStore[poolId].mirrorReserve0  <= MT.balanceOf(PairPoolManager, currency0TokenIdFromPoolId(poolId)) &&
+            PoolStatusManager.statusStore[poolId].mirrorReserve1  <= MT.balanceOf(PairPoolManager, currency1TokenIdFromPoolId(poolId)) &&
+            ///
         PoolStatusManager.statusStore[poolId].key.fee <= MAX_FEE() &&
         Helper.PoolKeyToId(PoolStatusManager.getKey(poolId)) == poolId))
     &&
@@ -121,6 +151,7 @@ invariant ValidStatusInitializedPools(PoolManager.PoolId poolId)
         PoolStatusManager.statusStore[poolId].key.fee == 0))
     {
         preserved with (env e) {
+            //require pool_is_initialized[poolId];
             require ValidTimestamp(e);
             requireInvariant ValidStatusInitializedPools(PoolID1);
             requireInvariant ValidStatusInitializedPools(PoolID2);
