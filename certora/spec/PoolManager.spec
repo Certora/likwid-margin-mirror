@@ -6,7 +6,8 @@ methods {
     /// Pure function is summarized by a generic arbitrary mapping - this is logically sound.
     function Hooks.hasPermission(address self, uint160 flag) internal returns (bool) => CVLHasPermission(self, flag);
     function Helper.PoolKeyToId(PoolManager.PoolKey) external returns (PoolManager.PoolId) envfree;
-    function Helper.toCurrency(address token) external returns (PoolManager.Currency) envfree; 
+    function Helper.toCurrency(address token) external returns (PoolManager.Currency) envfree;
+    function Helper.getPriceX112FromReserves(uint256 _reserve0, uint256 _reserve1) external returns (uint224,uint224) envfree;
     function PM._initializePool(PoolManager.PoolId poolId, uint160 sqrtPriceX96) internal returns int24 => initializePoolCVL(poolId,sqrtPriceX96);
 }
 

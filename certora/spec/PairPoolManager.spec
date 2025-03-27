@@ -121,6 +121,96 @@ filtered{f -> !f.isView} {
     assert rateCumulative1_post >= rateCumulative1_pre && rateCumulative0_post >= rateCumulative0_pre;
 }
 
+rule addingLiquidityHasZeroEffectOnOtherPools(PoolManager.PoolId poolId, bool zeroForOne)
+{
+    env e;
+    uint256 reserve0;
+    uint256 reserve1;
+    reserve0, reserve1 = getReserves(e, poolId);
+    uint256 quote_amount = assert_uint256(min((zeroForOne ? reserve1 : reserve0)/2, 10^6));
+
+    uint256 amountIn_pre = PairPoolManager.getAmountIn(e, poolId, zeroForOne, quote_amount);
+        PairPoolManager.AddLiquidityParams params;
+        requireInvariant ValidStatusInitializedPools(params.poolId);
+        requireInvariant ValidStatusInitializedPools(poolId);
+        PairPoolManager.addLiquidity(e, params);
+    uint256 amountIn_post = PairPoolManager.getAmountIn(e, poolId, zeroForOne, quote_amount);
+
+    assert params.poolId != poolId => amountIn_post == amountIn_pre;
+}
+
+rule removingLiquidityHasZeroEffectOnOtherPools(PoolManager.PoolId poolId, bool zeroForOne)
+{
+    env e;
+    uint256 reserve0;
+    uint256 reserve1;
+    reserve0, reserve1 = getReserves(e, poolId);
+    uint256 quote_amount = assert_uint256(min((zeroForOne ? reserve1 : reserve0)/2, 10^6));
+
+    uint256 amountIn_pre = PairPoolManager.getAmountIn(e, poolId, zeroForOne, quote_amount);
+        PairPoolManager.RemoveLiquidityParams params;
+        requireInvariant ValidStatusInitializedPools(params.poolId);
+        requireInvariant ValidStatusInitializedPools(poolId);
+        PairPoolManager.removeLiquidity(e, params);
+    uint256 amountIn_post = PairPoolManager.getAmountIn(e, poolId, zeroForOne, quote_amount);
+
+    assert params.poolId != poolId => amountIn_post == amountIn_pre;
+}
+
+/// @title addLiquidity() shouldn't change the price by more than the allowed error.
+rule addLiquidityPriceStability(PoolManager.PoolId poolId, bool zeroForOne) 
+{
+    env e;
+    uint256 reserve0_pre;
+    uint256 reserve1_pre;
+    uint224 price0X112_pre;
+    uint224 price1X112_pre;
+    reserve0_pre, reserve1_pre = PairPoolManager.getReserves(e, poolId);
+    price0X112_pre, price1X112_pre = Helper.getPriceX112FromReserves(reserve0_pre, reserve1_pre);
+
+        PairPoolManager.AddLiquidityParams params;
+        require params.poolId == poolId;
+        requireInvariant ValidStatusInitializedPools(params.poolId);
+        PairPoolManager.addLiquidity(e, params);
+
+    uint256 reserve0_post;
+    uint256 reserve1_post;
+    uint224 price0X112_post;
+    uint224 price1X112_post;
+    reserve0_post, reserve1_post = PairPoolManager.getReserves(e, poolId);
+    price0X112_post, price1X112_post = Helper.getPriceX112FromReserves(reserve0_post, reserve1_post);
+
+    assert abs(price0X112_post - price0X112_pre) <= 2;
+    assert abs(price1X112_post - price1X112_pre) <= 2;
+}
+
+/// @title removeLiquidity() shouldn't change the price by more than the allowed error.
+rule removeLiquidityPriceStability(PoolManager.PoolId poolId, bool zeroForOne) 
+{
+    env e;
+    uint256 reserve0_pre;
+    uint256 reserve1_pre;
+    uint224 price0X112_pre;
+    uint224 price1X112_pre;
+    reserve0_pre, reserve1_pre = PairPoolManager.getReserves(e, poolId);
+    price0X112_pre, price1X112_pre = Helper.getPriceX112FromReserves(reserve0_pre, reserve1_pre);
+
+        PairPoolManager.RemoveLiquidityParams params;
+        require params.poolId == poolId;
+        requireInvariant ValidStatusInitializedPools(params.poolId);
+        PairPoolManager.removeLiquidity(e, params);
+    
+    uint256 reserve0_post;
+    uint256 reserve1_post;
+    uint224 price0X112_post;
+    uint224 price1X112_post;
+    reserve0_post, reserve1_post = PairPoolManager.getReserves(e, poolId);
+    price0X112_post, price1X112_post = Helper.getPriceX112FromReserves(reserve0_post, reserve1_post);
+
+    assert abs(price0X112_post - price0X112_pre) <= 2;
+    assert abs(price1X112_post - price1X112_pre) <= 2;
+}
+
 // excluding methods whose body is just `revert <msg>';
 use builtin rule sanity filtered{ f -> 
     !alwaysReverting(f) 
