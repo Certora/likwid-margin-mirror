@@ -4,10 +4,10 @@ import "./PoolManager.spec";
 import "./PoolStatusManager.spec";
 import "./getAmountsSummary.spec";
 
-// using PairPoolManager as PairPoolManager;
+using PairPoolManager as PairPoolManager;
 using LendingPoolManager as LendingPoolManager;
 using MirrorTokenManager as MirrorTokenManager;
-using PairPoolManagerHarness as PairPoolManager;
+using MarginLiquidity as MarginLiquidity;
 use rule removeLiquidityEndsWithZeroVirtualAccounting;
 use rule addLiquidityEndsWithZeroVirtualAccounting;
 use rule releaseEndsWithZeroVirtualAccounting;
@@ -80,6 +80,8 @@ methods {
 
     //function MarginFees.getBorrowRateCumulativeLast(PoolStatusManager.PoolStatus) external returns (uint256,uint256)
     //    => NONDET;
+    
+    function PoolStatusManager._updateInterests(PoolStatusManager.PoolStatus storage status) internal => noOp();
 }
 
 definition isUnlockCallback(method f) returns bool = 
@@ -91,6 +93,8 @@ definition hardMethods(method f) returns bool =
     f.selector == sig:PairPoolManager.removeLiquidity(PairPoolManager.RemoveLiquidityParams).selector ||
     f.selector == sig:PairPoolManager.swapMirror(address,address,PoolManager.PoolId,bool,uint256).selector ||
     f.selector == sig:PairPoolManager.mirrorInRealOut(PoolManager.PoolId,PoolManager.Currency,uint256).selector;
+    
+function noOp() {}
 
 function observeNowCVL() returns (uint224, uint256) {
     uint224 nondet1;
@@ -277,35 +281,75 @@ rule releaseDoesNotChangeBalances {
 rule addLiquidityPreservesShares() {
     env e;
     PairPoolManager.AddLiquidityParams params;
+    uint256 poolId = MarginLiquidity.getPoolId(e, params.poolId);
 
     uint256 preTotalSupply;
-    uint256 poolId = getPoolId(e, params.poolId);
-
-    (preTotalSupply, _, _) = getSupplies(e, poolId);
+    uint256 preReserve0; 
+    uint256 preReserve1;
+    (preReserve0, preReserve1) = PairPoolManager.getReserves(e, params.poolId);
+    (preTotalSupply, _, _) = MarginLiquidity.getSupplies(e, poolId);
 
     addLiquidity(e, params);
 
     uint256 postTotalSupply;
-    (postTotalSupply, _, _) = getSupplies(e, poolId);
+    uint256 postReserve0; 
+    uint256 postReserve1;
+    (postReserve0, postReserve1) = PairPoolManager.getReserves(e, params.poolId);
+    (postTotalSupply, _, _) = MarginLiquidity.getSupplies(e, poolId);
 
     assert preTotalSupply <= postTotalSupply;
+    assert (preReserve0 + preReserve1) * postTotalSupply == (postReserve0 + postReserve1) * preTotalSupply;
+}
+
+// invariant solvency() {
+//     PairPoolManager.getReserves(e, poolId)._reserve0 
+// }
+
+rule solvency (PairPoolManager.PoolId poolId, env e, method f) filtered{f -> !f.isView} {
+
+    uint256 poolId_u256 = MarginLiquidity.getPoolId(e, poolId);
+    uint256 preTotalSupply;
+    uint256 preReserve0; 
+    uint256 preReserve1;
+    (preReserve0, preReserve1) = PairPoolManager.getReserves(e, poolId); 
+    (preTotalSupply, _, _) = MarginLiquidity.getSupplies(e, poolId_u256); 
+
+    require preReserve0 + preReserve1 >= preTotalSupply;
+
+    calldataarg args; 
+    f(e, args); 
+
+    uint256 postTotalSupply;
+    uint256 postReserve0; 
+    uint256 postReserve1;
+    (postReserve0, postReserve1) = PairPoolManager.getReserves(e, poolId); 
+    (postTotalSupply, _, _) = MarginLiquidity.getSupplies(e, poolId_u256); 
+
+    assert postReserve0 + postReserve1 >= postTotalSupply;
 }
 
 rule removeLiquidityPreservesShares() {
     env e;
     PairPoolManager.RemoveLiquidityParams params;
 
-    uint256 preTotalSupply;
-    uint256 poolId = getPoolId(e, params.poolId);
+    uint256 poolId = MarginLiquidity.getPoolId(e, params.poolId);
 
-    (preTotalSupply, _, _) = getSupplies(e, poolId);
+    uint256 preTotalSupply;
+    uint256 preReserve0; 
+    uint256 preReserve1;
+    (preReserve0, preReserve1) = PairPoolManager.getReserves(e, params.poolId);
+    (preTotalSupply, _, _) = MarginLiquidity.getSupplies(e, poolId);
 
     removeLiquidity(e, params);
 
     uint256 postTotalSupply;
-    (postTotalSupply, _, _) = getSupplies(e, poolId);
+    uint256 postReserve0; 
+    uint256 postReserve1;
+    (postReserve0, postReserve1) = PairPoolManager.getReserves(e, params.poolId);
+    (postTotalSupply, _, _) = MarginLiquidity.getSupplies(e, poolId);
 
     assert preTotalSupply >= postTotalSupply;
+    assert (preReserve0 + preReserve1) * postTotalSupply == (postReserve0 + postReserve1) * preTotalSupply;
 }
 
 rule roundTripSwapResultsInLoss() {
@@ -317,7 +361,7 @@ rule roundTripSwapResultsInLoss() {
     IPoolManager.SwapParams reverseSwap;
     
     // Store initial state
-    mathint initialAmount = (firstSwap.amountSpecified);
+    mathint initialAmount = -(firstSwap.amountSpecified);
     
     // Rule setup requirements 
     require firstSwap.zeroForOne == true;
@@ -335,4 +379,67 @@ rule roundTripSwapResultsInLoss() {
     
     // Final amount should be less than initial due to fees
     assert finalAmount <= initialAmount;
+}
+
+rule roundTripSwapBasic() {
+    env e;
+
+    // initial reserves;
+    uint256 reserveIn0;
+    uint256 reserveOut0;
+    require reserveIn0 > 0 && reserveOut0 > 0;
+    
+    // ------ forward swap -------
+
+    // input amount for forward swap
+    uint256 amountIn;
+
+    // input amount after fees;
+    uint256 amountInAfterFees;
+    require amountInAfterFees <= amountIn;
+
+    // output amount forward swap;
+    uint256 amountOut = amountOutCVL(amountInAfterFees, reserveOut0, reserveIn0);
+
+    // new reserves;
+    uint256 reserveIn1;
+    require reserveIn1 == reserveIn0 + amountInAfterFees;
+    uint256 reserveOut1;
+    require reserveOut1 == reserveOut0 - amountOut;
+
+    // ------ reverse swap -------
+
+    // input for reverse swap after fees
+    uint256 amountOutAfterFees;
+    require amountOutAfterFees <= amountOut;
+
+    // output amount forward swap;
+    uint256 finalAmount = amountOutCVL(amountOutAfterFees, reserveIn1, reserveOut1);
+
+    assert finalAmount <= amountIn;
+}
+
+rule intergrityOfSetAndUpdateBalances() {
+    env e;
+    PairPoolManager.PoolKey key;
+    PairPoolManager.PoolId poolId = Helper.PoolKeyToId(key);
+    PairPoolManager.PoolStatus status = PoolStatusManager.getStatus(e, poolId);
+
+    // require PoolStatusManager.blockTimestampLast != uint32(e.block.timestamp % (2 ** 32));
+    // require status.blockTimestampLast == require_uint32(e.block.timestamp % (2 ^ 32));
+    
+    PoolStatusManager.updateBalances(e, key);
+
+    uint256 preReserve0; 
+    uint256 preReserve1; 
+    (preReserve0, preReserve1) = getReserves(e, poolId);
+
+    PoolStatusManager.setBalances(e, key);
+    PoolStatusManager.updateBalances(e, key);
+
+    uint256 postReserve0; 
+    uint256 postReserve1; 
+    (postReserve0, postReserve1) = getReserves(e, poolId);
+
+    assert preReserve0 == postReserve0;
 }
