@@ -78,11 +78,6 @@ ghost amountInNoFeeCVL(uint256 /* amountOut */, uint256 /* reserveOut */, uint25
         amountInNoFeeBound(amountInNoFeeCVL(amountOut,reserveOut,reserveIn),amountOut,reserveOut,reserveIn);
 }
 
-/*
-uint256 numerator = amountInWithoutFee * reserveOut;
-uint256 denominator = reserveIn + amountInWithoutFee;
-amountOut = numerator / denominator;
-*/
 definition amountOutBound(uint256 amountOut,uint256 deducted,uint256 reserveOut,uint256 reserveIn) returns bool = 
     amountOut * (reserveIn + deducted) <= deducted * reserveOut
     &&
@@ -93,6 +88,12 @@ ghost amountOutCVL(uint256 /* deducted */, uint256 /* reserveOut */, uint256 /* 
     axiom forall uint256 deducted. forall uint256 reserveOut. forall uint256 reserveIn. 
         amountOutBound(amountOutCVL(deducted, reserveOut, reserveIn),deducted, reserveOut, reserveIn);
 }
+
+// ghost amountInNoFeeCVL(uint256 /* amountOut */, uint256 /* reserveOut */, uint256 /* reserveIn */) returns uint256;
+// ghost amountOutCVL(uint256 /* deducted */, uint256 /* reserveOut */, uint256 /* reserveIn */) returns uint256 {
+//     axiom forall uint256 deducted. forall uint256 reserveOut. forall uint256 reserveIn.
+//         (reserveIn + deducted) * (reserveOut - amountOutCVL(deducted, reserveOut, reserveIn)) == reserveIn * reserveOut;
+// }
 
 ghost attachedAmountInCVL(uint24 /* fee */, uint256 /* amountInNoFees */) returns uint256 {
     axiom forall uint24 fee. forall uint256 amount.
