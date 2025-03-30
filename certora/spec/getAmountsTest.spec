@@ -51,7 +51,6 @@ rule checkFeeAxioms_getAmountIn(PoolStatusManager.PoolStatus status, bool zeroFo
     reserveIn, reserveOut = getReservesByStatus(status, zeroForOne);
 
     uint256 amountIn; uint24 fee; uint256 feeAmount;
-    require status.key.fee < MAX_FEE_UNITS() / 20;
     amountIn, fee, feeAmount = Test.getAmountIn(e, status, zeroForOne, amountOut);
     uint256 amountInNoFee = assert_uint256(amountIn - feeAmount);
 

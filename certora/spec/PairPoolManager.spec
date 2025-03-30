@@ -76,6 +76,9 @@ methods {
 
     function _.getAmountIn(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountOut) external with (env e)
         => getAmountInCVL(e.block.timestamp, status, zeroForOne, amountOut) expect (uint256,uint24,uint256);
+
+    //function MarginFees.getBorrowRateCumulativeLast(PoolStatusManager.PoolStatus) external returns (uint256,uint256)
+    //    => NONDET;
 }
 
 definition isUnlockCallback(method f) returns bool = 

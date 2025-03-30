@@ -18,7 +18,6 @@ methods {
 rule calldataMatches() {
     env e;
     MarginRouter.SwapParams params;
-    /// Prove this is correct.
     uint256 amountOut = exactInput(e, params);
 
     assert getSender() == e.msg.sender;
