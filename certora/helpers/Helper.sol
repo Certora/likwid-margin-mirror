@@ -8,6 +8,7 @@ import {PoolKey} from "lib/v4-periphery/lib/v4-core/src/types/PoolKey.sol";
 import {CurrencyPoolLibrary} from "src/libraries/CurrencyPoolLibrary.sol";
 import {UQ112x112} from "src/libraries/UQ112x112.sol";
 import {SafeCast} from "lib/v4-periphery/lib/v4-core/src/libraries/SafeCast.sol";
+import { BeforeSwapDelta, BeforeSwapDeltaLibrary } from "lib/v4-periphery/lib/v4-core/src/types/BeforeSwapDelta.sol";
 
 contract Helper {
     using SafeCast for uint256;
@@ -52,4 +53,12 @@ contract Helper {
         price0X112 = UQ112x112.encode(_reserve1.toUint112()).div(_reserve0.toUint112());
         price1X112 = UQ112x112.encode(_reserve0.toUint112()).div(_reserve1.toUint112());
     }
+
+    function getUnspecifiedDelta(BeforeSwapDelta delta) external pure returns (int128 deltaUnspecified) {
+        return BeforeSwapDeltaLibrary.getUnspecifiedDelta(delta);
+    }
+}
+
+contract FallbackTest {
+    fallback() external {}
 }
