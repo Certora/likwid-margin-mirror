@@ -2,6 +2,11 @@ name: Certora Prover Workflow
 
 on:
   pull_request:
+    branches:
+      - certora-v2
+  push:
+    branches:
+      - certora-v2
 
 env:
   FOUNDRY_PROFILE: ci
