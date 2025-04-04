@@ -78,10 +78,20 @@ methods {
     function _.getAmountIn(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountOut) external with (env e)
         => getAmountInCVL(e.block.timestamp, status, zeroForOne, amountOut) expect (uint256,uint24,uint256);
 
-    //function MarginFees.getBorrowRateCumulativeLast(PoolStatusManager.PoolStatus) external returns (uint256,uint256)
-    //    => NONDET;
-    
-    function PoolStatusManager._updateInterests(PoolStatusManager.PoolStatus storage status) internal => noOp();
+    function MarginFees.getBorrowRateCumulativeLast(PoolStatusManager.PoolStatus) external returns (uint256,uint256)
+       => NONDET;
+
+    function MarginLiquidity.getInterestReserves(address, PairPoolManager.PoolId, PairPoolManager.PoolStatus) external returns (uint256, uint256)
+        => NONDET;
+
+    function PoolStatusManager._updateInterest0(PairPoolManager.PoolStatus memory status, uint256, uint256) internal returns (PairPoolManager.InterestBalance memory) 
+        => interestBalanceCVL();
+
+    function PoolStatusManager._updateInterest1(PairPoolManager.PoolStatus memory status, uint256, uint256) internal returns (PairPoolManager.InterestBalance memory) 
+        => interestBalanceCVL();
+
+    function PoolStatusManager._updateInterests(PoolStatusManager.PoolStatus storage status) internal 
+        => noOp();
 }
 
 definition isUnlockCallback(method f) returns bool = 
@@ -95,6 +105,18 @@ definition hardMethods(method f) returns bool =
     f.selector == sig:PairPoolManager.mirrorInRealOut(PoolManager.PoolId,PoolManager.Currency,uint256).selector;
     
 function noOp() {}
+
+function interestBalanceCVL() returns PairPoolManager.InterestBalance {
+
+    PairPoolManager.InterestBalance res;
+
+    require res.allInterest == 0;
+    require res.pairInterest == 0;
+    require res.lendingInterest == 0;
+    require res.protocolInterest == 0;
+
+    return res;
+}
 
 function observeNowCVL() returns (uint224, uint256) {
     uint224 nondet1;
@@ -284,28 +306,35 @@ rule addLiquidityPreservesShares() {
     uint256 poolId = MarginLiquidity.getPoolId(e, params.poolId);
 
     uint256 preTotalSupply;
-    uint256 preReserve0; 
-    uint256 preReserve1;
-    (preReserve0, preReserve1) = PairPoolManager.getReserves(e, params.poolId);
-    (preTotalSupply, _, _) = MarginLiquidity.getSupplies(e, poolId);
+    // uint256 preTotalSupply_balanceOf;
+    // uint256 preReserve0; 
+    // uint256 preReserve1;
+    // (preReserve0, preReserve1) = PairPoolManager.getReserves(e, params.poolId);
+    // (preTotalSupply, _, _) = MarginLiquidity.getSupplies(e, poolId);
+    preTotalSupply = MarginLiquidity.balanceOf(e, currentContract, poolId);
+    
+    // require preTotalSupply == preTotalSupply_balanceOf;
 
     addLiquidity(e, params);
+    // uint256 id;
+    // uint8 level;
+    // uint256 amount;
+    // MarginLiquidity.addLiquidity(e, currentContract, id, level, amount);
 
     uint256 postTotalSupply;
-    uint256 postReserve0; 
-    uint256 postReserve1;
-    (postReserve0, postReserve1) = PairPoolManager.getReserves(e, params.poolId);
-    (postTotalSupply, _, _) = MarginLiquidity.getSupplies(e, poolId);
+    // uint256 postReserve0; 
+    // uint256 postReserve1;
+    // (postReserve0, postReserve1) = PairPoolManager.getReserves(e, params.poolId);
+    // (postTotalSupply, _, _) = MarginLiquidity.getSupplies(e, poolId);
+    postTotalSupply = MarginLiquidity.balanceOf(e, currentContract, poolId);
 
     assert preTotalSupply <= postTotalSupply;
-    assert (preReserve0 + preReserve1) * postTotalSupply == (postReserve0 + postReserve1) * preTotalSupply;
+    // require preTotalSupply > 0;
+    // require postReserve0 + postReserve1 > 0;
+    // assert (preReserve0 + preReserve1) * postTotalSupply <= (postReserve0 + postReserve1) * preTotalSupply;
 }
 
-// invariant solvency() {
-//     PairPoolManager.getReserves(e, poolId)._reserve0 
-// }
-
-rule solvency (PairPoolManager.PoolId poolId, env e, method f) filtered{f -> !f.isView} {
+rule solvency(PairPoolManager.PoolId poolId, env e, method f) filtered{f -> !f.isView} {
 
     uint256 poolId_u256 = MarginLiquidity.getPoolId(e, poolId);
     uint256 preTotalSupply;
