@@ -32,7 +32,7 @@ jobs:
 
       # (Optional) Run Certora munge script
       - name: Certora munge 
-        run: ./certora/patch/patch.sh
+        run: ./certora/scripts/Patch.sh
 
       # Compile Certora Specs
       - uses: Certora/certora-run-action@v1
@@ -61,7 +61,7 @@ jobs:
 
       # (Optional) Run Certora munge script
       - name: Certora munge
-        run: ./certora/patch/patch.sh
+        run: ./certora/scripts/Patch.sh
 
       # Run Certora Prover
       - uses: Certora/certora-run-action@v1
