@@ -7,6 +7,9 @@ import "./getAmountsSummary.spec";
 using PairPoolManager as PairPoolManager;
 using LendingPoolManager as LendingPoolManager;
 using MirrorTokenManager as MirrorTokenManager;
+using MarginLiquidity as MarginLiquidity; 
+using Fallback as Fallback;
+using PoolManager as PoolManager;
 
 use invariant ValidStatusInitializedPools filtered{f -> !calledByHook(f) && f.selector != sig:PairPoolManager.unlockCallback(bytes).selector}
 
@@ -125,6 +128,8 @@ rule withdrawEndsWithZeroVirtualAccounting() {
     require ValidTimestamp(e);
     
     require zeroCurrencyDeltaForAll();
+        env eSync;
+        PM.sync(eSync, Helper.toCurrency(PM._synchedCurrency));
         LendingPoolManager.withdraw(e, recipient, poolId, currency, amount);
     assert zeroCurrencyDeltaForAll();
 }
@@ -143,4 +148,25 @@ rule balanceMirrorEndsWithZeroVirtualAccounting() {
         PM.sync(eSync, Helper.toCurrency(PM._synchedCurrency));
         LendingPoolManager.balanceMirror(e, poolId, currency, amount);
     assert zeroCurrencyDeltaForAll();
+}
+
+rule depositWithdrawsOthersBalance(PoolManager.PoolId poolId, bool zeroForOne)
+{
+    env e;
+    address sender; require sender != PM;
+    address recipient;
+    address otherUser;
+
+    uint256 amount; 
+
+    PairPoolManager.PoolKey key = PoolStatusManager.getKey(poolId);
+    uint256 currency0ID = Helper.toId(key.currency0);
+
+    uint256 preBalance = PoolManager.balanceOf(otherUser, currency0ID);
+
+    LendingPoolManager.deposit(e, sender, recipient, poolId, key.currency0, amount);
+
+    uint256 postBalance = PoolManager.balanceOf(otherUser, currency0ID);
+
+    assert otherUser != sender && otherUser != recipient => preBalance == postBalance; 
 }
