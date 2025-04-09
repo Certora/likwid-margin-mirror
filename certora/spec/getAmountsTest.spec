@@ -64,7 +64,7 @@ rule checkFeeAxioms_getAmountIn(PoolStatusManager.PoolStatus status, bool zeroFo
 rule checkFeeAxioms_getAmountOut(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountIn) {
     /// This requirement is not always true, but is most likely to be in practice.
     /// It eliminates an exisiting bug in the dynamicFee calculation.
-    //require status.key.fee < MAX_FEE_UNITS() / 20;
+    require status.key.fee < MAX_FEE_UNITS() / 20;
     
     env e;
     uint256 reserveIn; uint256 reserveOut;
