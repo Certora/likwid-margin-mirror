@@ -29,6 +29,12 @@ function equalStatuses(PoolStatusManager.PoolStatus statusA, PoolStatusManager.P
 persistent ghost oracleReserves(address,address) returns uint224;
 persistent ghost oraclePriceLast(address,address) returns uint256;
 
+/*
+ * @title verifies the summaries for dynamicFee function.
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/fc0cdc4e6d4743c2a2ca8ccd6342c5c6?anonymousKey=d907032875c2c7d1d550a5279f4567ddef1c97ac
+ */
 rule checkAxioms_dynamicFee(PoolStatusManager.PoolStatus statusA, PoolStatusManager.PoolStatus statusB) {
     env e;
     address poolManager;
@@ -41,6 +47,12 @@ rule checkAxioms_dynamicFee(PoolStatusManager.PoolStatus statusA, PoolStatusMana
         => feeA <= feeB;
 }
 
+/*
+ * @title verifies the Fee axioms for getAmountIn function.
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/fc0cdc4e6d4743c2a2ca8ccd6342c5c6?anonymousKey=d907032875c2c7d1d550a5279f4567ddef1c97ac
+ */
 rule checkFeeAxioms_getAmountIn(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountOut) {
     /// This requirement is not always true, but is most likely to be in practice.
     /// It eliminates an exisiting bug in the dynamicFee calculation.
@@ -61,6 +73,12 @@ rule checkFeeAxioms_getAmountIn(PoolStatusManager.PoolStatus status, bool zeroFo
     assert status.key.fee < MAX_FEE_UNITS() => fee < MAX_FEE_UNITS();
 }
 
+/*
+ * @title verifies the Fee axioms for getAmountOut function.
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/fc0cdc4e6d4743c2a2ca8ccd6342c5c6?anonymousKey=d907032875c2c7d1d550a5279f4567ddef1c97ac
+ */
 rule checkFeeAxioms_getAmountOut(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountIn) {
     /// This requirement is not always true, but is most likely to be in practice.
     /// It eliminates an exisiting bug in the dynamicFee calculation.
@@ -80,6 +98,12 @@ rule checkFeeAxioms_getAmountOut(PoolStatusManager.PoolStatus status, bool zeroF
     assert status.key.fee < MAX_FEE_UNITS() => fee < MAX_FEE_UNITS();
 }
 
+/*
+ * @title verifies the Bound axioms for getAmountOut function.
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/fc0cdc4e6d4743c2a2ca8ccd6342c5c6?anonymousKey=d907032875c2c7d1d550a5279f4567ddef1c97ac
+ */
 rule checkAmountOutBoundAxiom(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountIn) {
     env e;
     uint256 reserveIn; uint256 reserveOut;
@@ -92,6 +116,12 @@ rule checkAmountOutBoundAxiom(PoolStatusManager.PoolStatus status, bool zeroForO
     assert amountOutBound(amountOut,deducted,reserveOut,reserveIn);
 }
 
+/*
+ * @title verifies the Bound axioms for getAmountIn function.
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/fc0cdc4e6d4743c2a2ca8ccd6342c5c6?anonymousKey=d907032875c2c7d1d550a5279f4567ddef1c97ac
+ */
 rule checkAmountInBoundAxiom(PoolStatusManager.PoolStatus status, bool zeroForOne, uint256 amountOut) {
     env e;
     uint256 reserveIn; uint256 reserveOut;

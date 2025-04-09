@@ -46,6 +46,12 @@ rule setBalancesCorrectStatusKey(PoolManager.PoolId poolId)
     assert Helper.PoolKeyToId(status.key) == poolId;
 }
 
+/*
+ * @title for every initialized pool stored in PoolStatusManager.statusStore, its poolId and poolKey are consistent with each other
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/6412b5d009f0497aae1af547ab22f080?anonymousKey=a6aff146a944c9780ad412a8dc1405ebe21e15f5
+ */
 invariant StatusStorePoolKeyMatch(PoolManager.PoolId poolId)
     (PoolStatusManager.statusStore[poolId].key.currency1 != 0 => Helper.PoolKeyToId(PoolStatusManager.getKey(poolId)) == poolId)
     &&

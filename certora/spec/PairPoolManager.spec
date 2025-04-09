@@ -130,8 +130,12 @@ function pairPoolManagerCVL(address callee) returns address {
     }
 }
 
-/// @title The rate cumulative last value can never decrease, for any pool.
-/// Timeouts may be resolved by summarizing mulDiv with MathSummary.spec/mulDivLIA.
+/*
+ * @title The rate cumulative last value can never decrease, for any pool.
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/70bcde5011d345e4a42802e4b2c77523?anonymousKey=cb4fa9d98c65c525cedcadb095e2cb0b2102faf6
+ */
 rule rateCumulativeCannotDecrease(PoolManager.PoolId poolId, method f) 
 filtered{f -> !f.isView && f.contract == PairPoolManager && !isUnlockCallback(f)} {
     requireInvariant ValidStatusInitializedPools(poolId);
@@ -146,6 +150,12 @@ filtered{f -> !f.isView && f.contract == PairPoolManager && !isUnlockCallback(f)
     assert rateCumulative1_post >= rateCumulative1_pre && rateCumulative0_post >= rateCumulative0_pre;
 }
 
+/*
+ * @title the addLiquidity method does not affect the getAmountIn values of other pools.
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/c15cf072da6f4182b00a2f08bda6df13?anonymousKey=b2be7fb72a743fc965643b656fa28a890179c52c
+ */
 rule addingLiquidityHasZeroEffectOnOtherPools(PoolManager.PoolId poolId, bool zeroForOne)
 {
     env e;
@@ -164,6 +174,12 @@ rule addingLiquidityHasZeroEffectOnOtherPools(PoolManager.PoolId poolId, bool ze
     assert params.poolId != poolId => amountIn_post == amountIn_pre;
 }
 
+/*
+ * @title the removeLiquidity method does not affect the getAmountIn values of other pools.
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/7fdeaee015ab414d8d0234789598ea47?anonymousKey=90d3c8a1feae75e1239bc559bd3e06e6c6e4d084
+ */
 rule removingLiquidityHasZeroEffectOnOtherPools(PoolManager.PoolId poolId, bool zeroForOne)
 {
     env e;
@@ -183,6 +199,7 @@ rule removingLiquidityHasZeroEffectOnOtherPools(PoolManager.PoolId poolId, bool 
 }
 
 /// @title addLiquidity() shouldn't change the price by more than the allowed error.
+/// below rule is work in progress; issues: rule fails because the bound is too strict  
 rule addLiquidityPriceStability(PoolManager.PoolId poolId, bool zeroForOne) 
 {
     env e;
@@ -210,6 +227,7 @@ rule addLiquidityPriceStability(PoolManager.PoolId poolId, bool zeroForOne)
 }
 
 /// @title removeLiquidity() shouldn't change the price by more than the allowed error.
+/// below rule is work in progress; issues: timeout
 rule removeLiquidityPriceStability(PoolManager.PoolId poolId, bool zeroForOne) 
 {
     env e;
@@ -260,6 +278,12 @@ function getAllBalances(env e, PairPoolManager.PoolKey key, uint256 poolId)
     return (totalSupply, realReserve0, realReserve1, mirrorReserve0, mirrorReserve1);
 }
 
+/*
+ * @title addLiquidity does not decrease the real reserves and does not change mirror reserves. 
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/bcdca06c65574489b4c9cfc6a43627b2?anonymousKey=d1222b8a6af84d6b2d6863cb7b0ef3ce813765e5
+ */
 rule integrityOfAddLiquidity() {
     env e;
     PairPoolManager.AddLiquidityParams params;
@@ -294,6 +318,12 @@ rule integrityOfAddLiquidity() {
     assert preMirrorReserve1 == postMirrorReserve1;
 }
 
+/*
+ * @title removeLiquidity does not increase the real reserves and does not change mirror reserves. 
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/7fdeaee015ab414d8d0234789598ea47?anonymousKey=90d3c8a1feae75e1239bc559bd3e06e6c6e4d084
+ */
 rule integrityOfRemoveLiquidity() {
     env e;
     PairPoolManager.RemoveLiquidityParams params;
@@ -328,6 +358,12 @@ rule integrityOfRemoveLiquidity() {
     assert preMirrorReserve1 == postMirrorReserve1;
 }
 
+/*
+ * @title setBalance() followed updateBalance() does not change the balances
+ * @status Verified after fix
+ * @notice 
+ * @report https://prover.certora.com/output/497546/f8bac2eebb7941bbb357e6d5c370e3b3?anonymousKey=4a139a9a266349fd26a60c26ae13ef15559e68e1
+ */
 rule intergrityOfSetAndUpdateBalances() {
     env e;
     PairPoolManager.PoolId poolId;
@@ -361,6 +397,12 @@ rule intergrityOfSetAndUpdateBalances() {
     assert preMirrorReserve1 == postMirrorReserve1;
 }
 
+/*
+ * @title his rule demonstrates how retainSupply can grow bigger than the totalSupply
+ * @status Violated
+ * @notice 
+ * @report https://prover.certora.com/output/497546/fa08a13d5e3e41a782991f0917016f03?anonymousKey=094bbcee75ecd6785ea7c864b1ae3cca3c753637
+ */
 rule integrityOfTotalSupply() {
     env e;
     uint256 uPoolId;

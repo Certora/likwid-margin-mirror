@@ -124,6 +124,12 @@ function pairPoolManagerCVL(address callee) returns address {
     }
 }
 
+/*
+ * @title amountOutCVL for swap and reverse swap should not result in profit
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/2fe4944bef244cb3aa7b08755eeb39cb?anonymousKey=2a9855b87fd9c54f947d3b067ba2a0e398d089ad
+ */
 rule roundTripSwapBasic() {
     env e;
 
@@ -162,6 +168,12 @@ rule roundTripSwapBasic() {
     assert finalAmount <= amountIn;
 }
 
+/*
+ * @title performing a swap and then a reverse swap in the same transaction block cannot result in a profit
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/2fe4944bef244cb3aa7b08755eeb39cb?anonymousKey=2a9855b87fd9c54f947d3b067ba2a0e398d089ad
+ */
 rule roundTripSwapCannotMakeProfit() {
     env e;
     

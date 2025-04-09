@@ -101,6 +101,12 @@ use builtin rule sanity filtered{ f ->
         && f.contract == currentContract
         }
 
+/*
+ * @title virtual accounting by the deposit method is zeroed-out at the end 
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/9f2eac4697bf4fae924dcf83af239ce5?anonymousKey=25955e8d123549c9702a95684a5370f06f5122fe
+ */
 rule depositEndsWithZeroVirtualAccounting() {
     env e;
     address sender; require sender != PM;
@@ -118,6 +124,12 @@ rule depositEndsWithZeroVirtualAccounting() {
     assert zeroCurrencyDeltaForAll();
 }
 
+/*
+ * @title virtual accounting by the withdraw method is zeroed-out at the end 
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/9f2eac4697bf4fae924dcf83af239ce5?anonymousKey=25955e8d123549c9702a95684a5370f06f5122fe
+ */
 rule withdrawEndsWithZeroVirtualAccounting() {
     env e;
     address recipient;
@@ -134,6 +146,12 @@ rule withdrawEndsWithZeroVirtualAccounting() {
     assert zeroCurrencyDeltaForAll();
 }
 
+/*
+ * @title virtual accounting by the balanceMirror method is zeroed-out at the end 
+ * @status Verified
+ * @notice 
+ * @report https://prover.certora.com/output/497546/9f2eac4697bf4fae924dcf83af239ce5?anonymousKey=25955e8d123549c9702a95684a5370f06f5122fe
+ */
 rule balanceMirrorEndsWithZeroVirtualAccounting() {
     env e;
     require e.msg.sender != PM;
@@ -150,6 +168,12 @@ rule balanceMirrorEndsWithZeroVirtualAccounting() {
     assert zeroCurrencyDeltaForAll();
 }
 
+/*
+ * @title the deposit method should not change balance of any un-involved user 
+ * @status Violated
+ * @notice 
+ * @report https://prover.certora.com/output/497546/9f2eac4697bf4fae924dcf83af239ce5?anonymousKey=25955e8d123549c9702a95684a5370f06f5122fe
+ */
 rule depositWithdrawsOthersBalance(PoolManager.PoolId poolId, bool zeroForOne)
 {
     env e;

@@ -4,6 +4,14 @@ import "./PoolManager.spec";
 import "./PoolStatusManager.spec";
 import "./getAmountsSummary.spec";
 
+/*
+ * @title No Non-Zero Currency Deltas after Locking of PoolManager for methods: addLiquidity, removeLiquidity, release, collect, swapMirror and margin
+ * @status Verified after fix
+ * @notice 
+ * @report https://prover.certora.com/output/497546/76bfd46d069d41fc83e5b23d0dde2df4?anonymousKey=462ac02b627c982377a9f27f587e80ca2307b584
+ */
+
+
 using PairPoolManager as PairPoolManager;
 using LendingPoolManager as LendingPoolManager;
 using MirrorTokenManager as MirrorTokenManager;
@@ -95,16 +103,6 @@ methods {
     function PoolStatusManager._updateInterests(PairPoolManager.PoolStatus storage) internal 
         => noOp();
 }
-
-definition isUnlockCallback(method f) returns bool = 
-    f.selector == sig:LendingPoolManager.unlockCallback(bytes).selector ||
-    f.selector == sig:PairPoolManager.unlockCallback(bytes).selector;
-
-definition hardMethods(method f) returns bool = 
-    f.selector == sig:PairPoolManager.addLiquidity(PairPoolManager.AddLiquidityParams).selector ||
-    f.selector == sig:PairPoolManager.removeLiquidity(PairPoolManager.RemoveLiquidityParams).selector ||
-    f.selector == sig:PairPoolManager.swapMirror(address,address,PoolManager.PoolId,bool,uint256).selector ||
-    f.selector == sig:PairPoolManager.mirrorInRealOut(PoolManager.PoolId,PoolManager.Currency,uint256).selector;
     
 function noOp() {}
 
