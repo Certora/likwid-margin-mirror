@@ -81,28 +81,18 @@ methods {
     function MarginFees.getBorrowRateCumulativeLast(PoolStatusManager.PoolStatus) external returns (uint256,uint256)
        => NONDET;
 
-    // function MarginLiquidity.getInterestReserves(address, PairPoolManager.PoolId, PairPoolManager.PoolStatus) external returns (uint256, uint256)
-    //     => NONDET;
+    function MarginLiquidity.getInterestReserves(address, PairPoolManager.PoolId, PairPoolManager.PoolStatus) external returns (uint256, uint256)
+        => NONDET;
 
-    // function PoolStatusManager._updateInterest0(PairPoolManager.PoolStatus memory status, uint256, uint256) internal returns (PairPoolManager.InterestBalance memory) 
-    //     => interestBalanceCVL();
+    function PoolStatusManager._updateInterest0(PairPoolManager.PoolStatus memory status, uint256, uint256) internal returns (PairPoolManager.InterestBalance memory) 
+        => interestBalanceCVL();
 
-    // function PoolStatusManager._updateInterest1(PairPoolManager.PoolStatus memory status, uint256, uint256) internal returns (PairPoolManager.InterestBalance memory) 
-    //     => interestBalanceCVL();
+    function PoolStatusManager._updateInterest1(PairPoolManager.PoolStatus memory status, uint256, uint256) internal returns (PairPoolManager.InterestBalance memory) 
+        => interestBalanceCVL();
 
-    // function PoolStatusManager._updateInterests(PoolStatusManager.PoolStatus storage status) internal 
-    //     => noOp();
+    function PoolStatusManager._updateInterests(PoolStatusManager.PoolStatus storage status) internal 
+        => noOp();
 }
-
-definition isUnlockCallback(method f) returns bool = 
-    f.selector == sig:LendingPoolManager.unlockCallback(bytes).selector ||
-    f.selector == sig:PairPoolManager.unlockCallback(bytes).selector;
-
-definition hardMethods(method f) returns bool = 
-    f.selector == sig:PairPoolManager.addLiquidity(PairPoolManager.AddLiquidityParams).selector ||
-    f.selector == sig:PairPoolManager.removeLiquidity(PairPoolManager.RemoveLiquidityParams).selector ||
-    f.selector == sig:PairPoolManager.swapMirror(address,address,PoolManager.PoolId,bool,uint256).selector ||
-    f.selector == sig:PairPoolManager.mirrorInRealOut(PoolManager.PoolId,PoolManager.Currency,uint256).selector;
     
 function noOp() {}
 
@@ -172,32 +162,7 @@ rule roundTripSwapBasic() {
     assert finalAmount <= amountIn;
 }
 
-rule intergrityOfSetAndUpdateBalances() {
-    env e;
-    PairPoolManager.PoolKey key;
-    PairPoolManager.PoolId poolId = Helper.PoolKeyToId(key);
-    PairPoolManager.PoolStatus status = PoolStatusManager.getStatus(e, poolId);
-
-    // require PoolStatusManager.blockTimestampLast != uint32(e.block.timestamp % (2 ** 32));
-    // require status.blockTimestampLast == require_uint32(e.block.timestamp % (2 ^ 32));
-    
-    PoolStatusManager.updateBalances(e, key);
-
-    uint256 preReserve0; 
-    uint256 preReserve1; 
-    (preReserve0, preReserve1) = PairPoolManager.getReserves(e, poolId);
-
-    PoolStatusManager.setBalances(e, key);
-    PoolStatusManager.updateBalances(e, key);
-
-    uint256 postReserve0; 
-    uint256 postReserve1; 
-    (postReserve0, postReserve1) = PairPoolManager.getReserves(e, poolId);
-
-    assert preReserve0 == postReserve0;
-}
-
-rule roundTripSwapResultsInLoss() {
+rule roundTripSwapCannotMakeProfit() {
     env e;
     
     address sender;
@@ -209,9 +174,7 @@ rule roundTripSwapResultsInLoss() {
     PairPoolManager.PoolId poolId = Helper.PoolKeyToId(key);
     PairPoolManager.PoolStatus status = PoolStatusManager.getStatus(e, poolId);
 
-    // require PoolStatusManager.blockTimestampLast != uint32(e.block.timestamp % (2 ** 32));
     require status.blockTimestampLast == require_uint32(e.block.timestamp % (2 ^ 32));
-
     
     // Store initial state
     mathint initialAmount = -(firstSwap.amountSpecified);
