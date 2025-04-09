@@ -58,7 +58,3 @@ contract Helper {
         return BeforeSwapDeltaLibrary.getUnspecifiedDelta(delta);
     }
 }
-
-contract FallbackTest {
-    fallback() external {}
-}
