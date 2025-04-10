@@ -21,38 +21,8 @@ env:
 
 
 jobs:
-  # Compilation step to verify the correctness of the specs
-  compile:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      # (Optional) Add installation steps for your project
-      - name: Install dependencies
-        run: yarn install
-
-      # (Optional) Run Certora munge script
-      - name: Certora munge 
-        run: sh ./certora/scripts/Patch.sh
-
-      # Compile Certora Specs
-      - uses: Certora/certora-run-action@v1
-        with:
-          configurations: ${{ env.CONFIGS }}
-          solc-versions: 0.8.26
-          solc-remove-version-prefix: "0."
-          job-name: "Check Compilation Steps"
-          certora-key: ${{ secrets.CERTORAKEY }}
-          compilation-steps-only: true # only difference to `verify` step
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   verify:
     runs-on: ubuntu-latest
-    needs: compile
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
