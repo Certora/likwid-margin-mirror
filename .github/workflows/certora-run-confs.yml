@@ -13,7 +13,11 @@ env:
   # Add your configurations as lines where each line is a separate configuration.
   # You can specify additional options for each configuration by adding them after the configuration.
   CONFIGS: |
-    certora/conf/MarginPositionManager.conf
+    certora/conf/getAmountsTest.conf,
+    certora/conf/LendingPoolManager.conf,
+    certora/conf/MarginHook.conf,
+    certora/conf/PairPoolManager.conf,
+    certora/conf/PairPoolManagerCurrencyDeltas.conf
 
 
 jobs:
