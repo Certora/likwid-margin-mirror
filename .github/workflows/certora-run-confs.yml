@@ -40,6 +40,7 @@ jobs:
       # Run Certora Prover
       - uses: Certora/certora-run-action@v1
         with:
+          cli-version: 7.28 
           configurations: ${{ env.CONFIGS }}
           solc-versions: 0.8.26
           solc-remove-version-prefix: "0."
