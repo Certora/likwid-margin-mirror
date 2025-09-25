@@ -16,7 +16,10 @@ docs/
 .env
 .vscode/
 
+script/LocalTests.s.sol
+
 # Certora
 .certora_internal/
 emv*
-script/LocalTests.s.sol
+timeouter.md
+timeouter.json

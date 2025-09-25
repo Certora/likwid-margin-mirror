@@ -1,0 +1,31 @@
+--- src/PoolStatusManager.sol	2025-03-24 17:45:52.703013899 +0200
++++ ./certora/patches/PoolStatusManager.sol	2025-03-24 17:47:49.212999237 +0200
+@@ -182,6 +182,10 @@
+         (amountIn, feeAmount) = fee.attach(amountInWithoutFee);
+     }
+ 
++    function getKey(PoolId poolId) external view returns (PoolKey memory) {
++        return statusStore[poolId].key;
++    }
++
+     function _callSet() internal {
+         if (_notCallUpdate()) {
+             revert UpdateBalanceGuardErrorCall();
+@@ -483,7 +487,7 @@
+         } else {
+             status.lendingRealReserve1 = 0;
+         }
+-        emit Sync(
++        /*emit Sync(
+             poolId,
+             status.realReserve0,
+             status.realReserve1,
+@@ -493,7 +497,7 @@
+             status.lendingRealReserve1,
+             status.lendingMirrorReserve0,
+             status.lendingMirrorReserve1
+-        );
++        );*/
+     }
+ 
+     function updateProtocolFees(Currency currency, uint256 amount)
